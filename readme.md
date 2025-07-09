@@ -1,60 +1,152 @@
-# 🛡️ MalwareShield
+# MalwareShield Pro - Advanced Malware Analysis Platform
 
-A professional malware analysis platform built with Streamlit for static file analysis.
+## Overview
+
+MalwareShield Pro is a professional, web-based malware analysis platform built with Streamlit. It provides comprehensive static file analysis, VirusTotal integration, threat scoring, and detailed PDF reporting capabilities.
 
 ## Features
 
-- **File Upload & Analysis**: Drag-and-drop file upload with comprehensive analysis
-- **Hash Calculation**: MD5, SHA1, and SHA256 hash generation
-- **Entropy Analysis**: File entropy calculation with visual gauge
-- **String Extraction**: Extract and analyze readable strings from files
-- **Pattern Detection**: Identify URLs, IP addresses, and email addresses
-- **Threat Assessment**: Automated threat level calculation
-- **Cybersecurity-themed UI**: Professional dark theme with modern design
+### Core Analysis Capabilities
+- **Static File Analysis**: Hash calculation, entropy analysis, string extraction, pattern detection
+- **VirusTotal Integration**: Real-time threat intelligence with file hash lookup and upload scanning
+- **Advanced Threat Scoring**: Weighted scoring system combining multiple analysis vectors
+- **Professional PDF Reports**: Comprehensive downloadable reports with charts and detailed findings
 
-## Live Demo
+### User Interface
+- **Modern Professional Design**: Clean, light theme with intuitive navigation
+- **Interactive Dashboards**: Real-time progress tracking and result visualization
+- **Responsive Layout**: Optimized for various screen sizes and professional environments
+- **Comprehensive Results Display**: Multiple tabs for organized information presentation
 
-Visit the application at: [https://darkexpo.streamlit.app/]
+## Technology Stack
 
-## Deployment
+- **Frontend**: Streamlit with custom CSS styling
+- **Visualization**: Plotly for interactive charts and gauges
+- **PDF Generation**: ReportLab for professional report creation
+- **File Analysis**: Custom Python modules for static analysis
+- **API Integration**: VirusTotal API v3 for threat intelligence
+- **Data Processing**: Pandas for data manipulation and display
 
-### Streamlit Cloud (Recommended)
+## Installation & Setup
 
-1. Fork/clone this repository
-2. Go to [share.streamlit.io](https://share.streamlit.io/)
-3. Click "New app"
-4. Select your repository
-5. Set main file path: `app.py`
-6. Click "Deploy"
+### Prerequisites
+- Python 3.8+
+- Valid VirusTotal API key (for threat intelligence features)
 
-### Local Development
-
-```bash
-# Install dependencies
-pip install streamlit pandas plotly
-
-# Run the application
-streamlit run app.py
+### Required Dependencies
 ```
+streamlit
+plotly
+pandas
+reportlab
+python-magic
+requests
+```
+
+### Configuration
+1. Set your VirusTotal API key as an environment variable:
+   ```bash
+   export VIRUSTOTAL_API_KEY="your_api_key_here"
+   ```
+
+2. Configure Streamlit (place in `.streamlit/config.toml`):
+   ```toml
+   [server]
+   headless = true
+   address = "0.0.0.0"
+   port = 5000
+   ```
 
 ## Usage
 
-1. Upload a file using the file uploader
-2. Configure analysis modules in the sidebar
-3. Click "Start Analysis" to begin
-4. View results in the interactive dashboard
+### Running the Application
+```bash
+streamlit run app.py --server.port 5000
+```
 
-## Technical Details
+### Analysis Workflow
+1. **File Upload**: Choose any file for analysis in the File Analysis tab
+2. **Static Analysis**: Configure analysis parameters and run comprehensive static analysis
+3. **VirusTotal Scanning**: Check file hashes or upload files for cloud-based threat detection
+4. **Results Review**: View detailed results in the Results Dashboard
+5. **Report Generation**: Create professional PDF reports in the Reports tab
 
-- **Framework**: Streamlit
-- **Python Version**: 3.8+
-- **Dependencies**: streamlit, pandas, plotly
-- **Analysis Modules**: Hash calculation, entropy analysis, string extraction, pattern detection
+### Key Features
 
-## Security Note
+#### Static Analysis
+- File hash calculation (MD5, SHA1, SHA256)
+- Shannon entropy calculation for encryption/packing detection
+- String extraction with configurable parameters
+- Pattern detection for URLs, IPs, emails, and suspicious content
+- File metadata extraction and analysis
 
-This application performs static analysis only - no code execution occurs. Files are analyzed in memory and not stored permanently.
+#### VirusTotal Integration
+- File hash lookup against VirusTotal database
+- File upload and scanning for new samples
+- Comprehensive detection results from multiple antivirus engines
+- Real-time threat intelligence and reputation scoring
 
-## Author
+#### Threat Scoring System
+- Multi-factor scoring algorithm
+- Weighted combination of static analysis and VirusTotal results
+- Risk level categorization (Low, Medium, High)
+- Detailed component-level scoring breakdowns
 
-Built with 🛡️ by [Vishwas]
+## Security Considerations
+
+- All file analysis is performed in-memory without persistent storage
+- API keys are managed through environment variables
+- No code execution - purely static analysis approach
+- Rate limiting compliance for external API services
+
+## API Integration
+
+### VirusTotal API v3
+- File hash lookup: `GET /files/{hash}`
+- File upload: `POST /files`
+- Analysis results: `GET /analyses/{id}`
+- Automatic rate limiting for free tier compliance
+
+## Professional Use Cases
+
+- Malware analysis and research
+- Incident response and forensics
+- Security assessment and auditing
+- Threat hunting and intelligence gathering
+- Educational cybersecurity training
+
+## Deployment
+
+The application is designed for professional deployment environments:
+- Single-user analysis workstations
+- Team collaboration environments
+- Educational laboratory settings
+- Research and development environments
+
+## Architecture
+
+### Modular Design
+- `utils/file_analyzer.py`: Static file analysis engine
+- `utils/virustotal_api.py`: VirusTotal API integration
+- `utils/threat_scorer.py`: Advanced threat scoring system
+- `utils/pdf_generator.py`: Professional report generation
+
+### Data Flow
+1. File upload and preprocessing
+2. Static analysis execution
+3. External threat intelligence gathering
+4. Scoring and risk assessment
+5. Results compilation and presentation
+6. Report generation and export
+
+## Professional Standards
+
+- Clean, maintainable code architecture
+- Comprehensive error handling and user feedback
+- Professional UI/UX design principles
+- Scalable and extensible framework
+- Industry-standard security practices
+
+## Support & Documentation
+
+For technical support, configuration assistance, or feature requests, refer to the integrated help system and documentation within the application interface.
