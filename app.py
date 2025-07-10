@@ -26,9 +26,34 @@ st.set_page_config(
 )
 
 # Load custom CSS
+# Load custom CSS
 def load_css():
-    with open("assets/custom_styles.css", "r") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    try:
+        with open("assets/custom_styles.css", "r") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except FileNotFoundError:
+        # Fallback CSS if file doesn't exist
+        st.markdown("""
+        <style>
+        .animated-header {
+            background: linear-gradient(135deg, #0f4c75, #3282b8, #bbe1fa);
+            padding: 2rem;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header-title {
+            font-size: 3rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .header-subtitle {
+            font-size: 1.2rem;
+            color: #e8f4f8;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
 # Initialize session state
 def init_session_state():
