@@ -35,13 +35,13 @@ class ThreatScorer:
             'ransomware': {
                 'keywords': ['encrypt', 'decrypt', 'ransom', 'bitcoin', 'unlock', 'payment'],
                 'apis': ['CryptEncrypt', 'CryptDecrypt', 'CryptGenKey'],
-                'patterns': ['\.encrypted', '\.locked', 'HOW_TO_DECRYPT'],
+                'patterns': [r'\.encrypted', r'\.locked', 'HOW_TO_DECRYPT'],
                 'weight': 40
             },
             'trojan': {
                 'keywords': ['backdoor', 'remote', 'control', 'command'],
                 'apis': ['CreateRemoteThread', 'WriteProcessMemory', 'SetWindowsHookEx'],
-                'patterns': ['cmd\.exe', 'powershell\.exe'],
+                'patterns': [r'cmd\.exe', r'powershell\.exe'],
                 'weight': 35
             },
             'spyware': {
@@ -53,7 +53,7 @@ class ThreatScorer:
             'worm': {
                 'keywords': ['spread', 'propagate', 'network', 'share'],
                 'apis': ['WNetAddConnection', 'WNetEnumResource', 'CreateFile'],
-                'patterns': ['autorun\.inf', 'usb', 'removable'],
+                'patterns': [r'autorun\.inf', 'usb', 'removable'],
                 'weight': 25
             },
             'adware': {

@@ -175,7 +175,11 @@ def run_basic_analysis(uploaded_file, config):
     reasons = []
     
     # Check entropy (high entropy might indicate encryption/packing)
-    if results['entropy'] > 7.5:
+    entropy_value = results['entropy']
+    if isinstance(entropy_value, dict):
+        entropy_value = entropy_value.get('overall_entropy', 0)
+    
+    if entropy_value > 7.5:
         threat_score += 30
         reasons.append("High entropy detected - possible encryption/packing")
     
@@ -324,6 +328,8 @@ def display_analysis_results(results):
     if 'entropy' in results:
         st.subheader("📈 Entropy Analysis")
         entropy_value = results['entropy']
+        if isinstance(entropy_value, dict):
+            entropy_value = entropy_value.get('overall_entropy', 0)
         
         # Create entropy gauge
         fig = go.Figure(go.Indicator(
@@ -373,13 +379,30 @@ def display_analysis_results(results):
     if 'strings' in results and results['strings']:
         st.subheader("📝 String Analysis")
         
-        with st.expander(f"Extracted Strings ({len(results['strings'])} found)"):
-            # Show strings in a scrollable container
-            strings_text = '\n'.join(results['strings'][:50])  # Show first 50
-            st.text_area("Strings", strings_text, height=300, disabled=True)
+        strings_data = results['strings']
+        if isinstance(strings_data, dict):
+            # Handle new structured format
+            all_strings = []
+            if 'ascii_strings' in strings_data:
+                all_strings.extend(strings_data['ascii_strings'])
+            if 'unicode_strings' in strings_data:
+                all_strings.extend(strings_data['unicode_strings'])
             
-            if len(results['strings']) > 50:
-                st.info(f"Showing first 50 strings. Total: {len(results['strings'])}")
+            if all_strings:
+                with st.expander(f"Extracted Strings ({len(all_strings)} found)"):
+                    strings_text = '\n'.join(all_strings[:50])  # Show first 50
+                    st.text_area("Strings", strings_text, height=300, disabled=True)
+                    
+                    if len(all_strings) > 50:
+                        st.info(f"Showing first 50 strings. Total: {len(all_strings)}")
+        elif isinstance(strings_data, list):
+            # Handle old format
+            with st.expander(f"Extracted Strings ({len(strings_data)} found)"):
+                strings_text = '\n'.join(strings_data[:50])  # Show first 50
+                st.text_area("Strings", strings_text, height=300, disabled=True)
+                
+                if len(strings_data) > 50:
+                    st.info(f"Showing first 50 strings. Total: {len(strings_data)}")
     
     # Export Results
     st.subheader("📥 Export Results")
@@ -542,13 +565,34 @@ def main():
             
             # Quick stats
             if 'entropy' in results:
-                st.metric("File Entropy", f"{results['entropy']:.2f}")
+                entropy_value = results['entropy']
+                if isinstance(entropy_value, dict):
+                    entropy_value = entropy_value.get('overall_entropy', 0)
+                st.metric("File Entropy", f"{entropy_value:.2f}")
             
             if 'strings' in results:
-                st.metric("Strings Found", len(results['strings']))
+                strings_data = results['strings']
+                if isinstance(strings_data, dict):
+                    strings_count = strings_data.get('total_strings', 0)
+                    if strings_count == 0:
+                        strings_count = len(strings_data.get('ascii_strings', []))
+                elif isinstance(strings_data, list):
+                    strings_count = len(strings_data)
+                else:
+                    strings_count = 0
+                st.metric("Strings Found", strings_count)
             
             if 'patterns' in results:
-                pattern_count = sum(len(matches) for matches in results['patterns'].values())
+                patterns_data = results['patterns']
+                if isinstance(patterns_data, dict):
+                    pattern_count = 0
+                    for key, matches in patterns_data.items():
+                        if isinstance(matches, list):
+                            pattern_count += len(matches)
+                        elif isinstance(matches, dict):
+                            pattern_count += len(matches.get('matches', []))
+                else:
+                    pattern_count = 0
                 st.metric("Patterns Detected", pattern_count)
         else:
             st.info("📊 Upload a file to see analysis statistics")
