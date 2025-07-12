@@ -1,79 +1,88 @@
 """
-Advanced Analysis Engine
-Comprehensive file analysis and threat detection
+Analysis Engine Module
+
+Advanced file analysis engine with comprehensive static analysis capabilities
+including entropy calculation, string extraction, pattern detection, and heuristic analysis.
 """
 
 import hashlib
 import math
-import string
 import re
-import json
-import time
-from datetime import datetime
-from collections import Counter
+import string
+import struct
 import os
+from collections import Counter
+from datetime import datetime
+import json
 
 class AnalysisEngine:
     """
-    Advanced malware analysis engine with multiple detection methods
+    Comprehensive file analysis engine for malware detection
     """
     
     def __init__(self):
-        """Initialize the analysis engine"""
-        self.analysis_modules = {
-            'hash_analysis': self._analyze_hashes,
-            'entropy_analysis': self._analyze_entropy,
-            'string_extraction': self._extract_strings,
-            'pattern_detection': self._detect_patterns,
-            'behavioral_analysis': self._behavioral_analysis,
-            'metadata_analysis': self._analyze_metadata
-        }
+        """Initialize the analysis engine with pattern databases"""
+        self.suspicious_patterns = self._load_suspicious_patterns()
+        self.file_signatures = self._load_file_signatures()
+        self.api_patterns = self._load_api_patterns()
         
-        # Suspicious patterns for detection
-        self.suspicious_patterns = {
-            'registry_keys': [
-                r'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
-                r'HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
-                r'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce',
-                r'HKEY_CURRENT_USER\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce'
-            ],
-            'suspicious_apis': [
-                'CreateRemoteThread', 'WriteProcessMemory', 'VirtualAllocEx',
-                'SetWindowsHookEx', 'GetProcAddress', 'LoadLibrary',
-                'VirtualAlloc', 'VirtualProtect', 'CreateProcess',
-                'ShellExecute', 'WinExec', 'RegCreateKey', 'RegSetValue',
-                'CryptEncrypt', 'CryptDecrypt', 'InternetOpen', 'InternetConnect'
-            ],
-            'crypto_indicators': [
-                'bitcoin', 'btc', 'wallet', 'cryptocurrency', 'mining',
-                'private.*key', 'public.*key', 'encryption', 'cipher',
-                'ransomware', 'decrypt', 'unlock.*files'
-            ],
-            'network_indicators': [
-                r'https?://[^\s<>"]+',
-                r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b',
-                r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-                r'ftp://[^\s<>"]+',
-                r'\.onion\b'
-            ],
-            'file_operations': [
-                'CreateFile', 'WriteFile', 'ReadFile', 'DeleteFile',
-                'MoveFile', 'CopyFile', 'FindFirstFile', 'FindNextFile'
-            ],
-            'persistence_mechanisms': [
-                'CreateService', 'OpenService', 'StartService',
-                'ControlService', 'QueryServiceStatus', 'CreateMutex',
-                'OpenMutex', 'ReleaseMutex'
-            ]
+    def _load_suspicious_patterns(self):
+        """Load suspicious pattern definitions"""
+        return {
+            'urls': re.compile(r'https?://[^\s<>"\']+', re.IGNORECASE),
+            'emails': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
+            'ip_addresses': re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'),
+            'bitcoin_addresses': re.compile(r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b'),
+            'ethereum_addresses': re.compile(r'\b0x[a-fA-F0-9]{40}\b'),
+            'file_paths': re.compile(r'[A-Za-z]:\\\\[^\\]+(?:\\\\[^\\]+)*', re.IGNORECASE),
+            'registry_keys': re.compile(r'HKEY_[A-Z_]+\\[^\\]+', re.IGNORECASE),
+            'base64_data': re.compile(r'[A-Za-z0-9+/]{20,}={0,2}'),
+            'hex_data': re.compile(r'[0-9a-fA-F]{32,}'),
+            'phone_numbers': re.compile(r'\+?[1-9]\d{1,14}'),
+            'credit_cards': re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b'),
+            'social_security': re.compile(r'\b\d{3}-?\d{2}-?\d{4}\b'),
+            'passwords': re.compile(r'(?i)(password|passwd|pwd|pass)\s*[=:]\s*[\'""]?([^\s\'"";,]+)', re.IGNORECASE)
         }
-        
-        # Known malware file signatures
-        self.malware_signatures = {
-            'MZ': 'PE Executable',
-            'PK': 'ZIP Archive',
-            'PDF': 'PDF Document',
-            '7z': '7-Zip Archive',
-            'Rar!': 'RAR Archive'
+    
+    def _load_file_signatures(self):
+        """Load file signature patterns for identification"""
+        return {
+            'pe_executable': [b'\x4d\x5a', b'PE\x00\x00'],  # MZ header, PE signature
+            'elf_executable': [b'\x7fELF'],
+            'java_class': [b'\xca\xfe\xba\xbe'],
+            'pdf': [b'%PDF'],
+            'zip': [b'PK\x03\x04', b'PK\x05\x06', b'PK\x07\x08'],
+            'rar': [b'Rar!\x1a\x07\x00'],
+            'gzip': [b'\x1f\x8b'],
+            'bzip2': [b'BZ'],
+            '7zip': [b'7z\xbc\xaf\x27\x1c'],
+            'tar': [b'ustar'],
+            'dmg': [b'koly'],
+            'iso': [b'CD001'],
+            'script_batch': [b'@echo off', b'rem ', b'REM '],
+            'script_powershell': [b'powershell', b'PowerShell'],
+            'script_vbs': [b'WScript', b'VBScript'],
+            'script_js': [b'<script', b'javascript:'],
+            'office_doc': [b'\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1'],  # OLE2 signature
+            'rtf': [b'{\\rtf'],
+            'xml': [b'<?xml'],
+            'html': [b'<html', b'<HTML'],
+            'macho': [b'\xfe\xed\xfa\xce', b'\xfe\xed\xfa\xcf']
+        }
+    
+    def _load_api_patterns(self):
+        """Load suspicious API call patterns"""
+        return {
+            'file_operations': re.compile(r'\b(CreateFile|WriteFile|ReadFile|DeleteFile|CopyFile|MoveFile)\w*\b', re.IGNORECASE),
+            'registry_operations': re.compile(r'\b(RegCreateKey|RegSetValue|RegDeleteKey|RegOpenKey|RegQueryValue)\w*\b', re.IGNORECASE),
+            'process_operations': re.compile(r'\b(CreateProcess|TerminateProcess|OpenProcess|GetCurrentProcess)\w*\b', re.IGNORECASE),
+            'memory_operations': re.compile(r'\b(VirtualAlloc|VirtualFree|VirtualProtect|HeapAlloc|HeapFree)\w*\b', re.IGNORECASE),
+            'network_operations': re.compile(r'\b(socket|connect|send|recv|WSAStartup|InternetOpen|InternetConnect)\w*\b', re.IGNORECASE),
+            'crypto_operations': re.compile(r'\b(CryptAcquireContext|CryptCreateHash|CryptEncrypt|CryptDecrypt)\w*\b', re.IGNORECASE),
+            'service_operations': re.compile(r'\b(CreateService|StartService|ControlService|DeleteService)\w*\b', re.IGNORECASE),
+            'debug_operations': re.compile(r'\b(IsDebuggerPresent|CheckRemoteDebuggerPresent|OutputDebugString)\w*\b', re.IGNORECASE),
+            'injection_operations': re.compile(r'\b(WriteProcessMemory|ReadProcessMemory|SetWindowsHook|LoadLibrary|GetProcAddress)\w*\b', re.IGNORECASE),
+            'persistence_operations': re.compile(r'\b(SetWindowsHook|RegisterHotKey|SetTimer|WinExec|ShellExecute)\w*\b', re.IGNORECASE)
         }
     
     def analyze_file(self, file_data, filename, config=None):
@@ -82,183 +91,149 @@ class AnalysisEngine:
         
         Args:
             file_data (bytes): File content as bytes
-            filename (str): Name of the file
-            config (dict): Analysis configuration
+            filename (str): Original filename
+            config (dict): Analysis configuration options
             
         Returns:
-            dict: Complete analysis results
+            dict: Comprehensive analysis results
         """
         if config is None:
-            config = self._get_default_config()
+            config = {
+                'deep_analysis': True,
+                'extract_strings': True,
+                'pattern_detection': True,
+                'entropy_analysis': True,
+                'signature_analysis': True,
+                'min_string_length': 4,
+                'max_strings': 500
+            }
+        
+        # Initialize results structure
+        results = {
+            'filename': filename,
+            'file_size': len(file_data),
+            'analysis_time': datetime.now().isoformat(),
+            'file_info': {},
+            'hashes': {},
+            'entropy': {},
+            'strings': {},
+            'patterns': {},
+            'file_signature': {},
+            'suspicious_indicators': [],
+            'threat_assessment': {}
+        }
         
         try:
-            # Initialize results
-            results = {
-                'filename': filename,
-                'file_size': len(file_data),
-                'analysis_time': datetime.now().isoformat(),
-                'analysis_duration': 0,
-                'modules_run': [],
-                'errors': []
-            }
+            # Basic file information
+            results['file_info'] = self._analyze_file_info(file_data, filename)
             
-            start_time = time.time()
+            # Calculate hashes
+            results['hashes'] = self._calculate_hashes(file_data)
             
-            # Run enabled analysis modules
-            for module_name, module_func in self.analysis_modules.items():
-                if config.get(module_name, True):
-                    try:
-                        module_results = module_func(file_data, filename, config)
-                        results.update(module_results)
-                        results['modules_run'].append(module_name)
-                    except Exception as e:
-                        error_msg = f"Error in {module_name}: {str(e)}"
-                        results['errors'].append(error_msg)
+            # Entropy analysis
+            if config.get('entropy_analysis', True):
+                results['entropy'] = self._analyze_entropy(file_data)
             
-            # Calculate analysis duration
-            results['analysis_duration'] = time.time() - start_time
+            # String extraction
+            if config.get('extract_strings', True):
+                results['strings'] = self._extract_strings(
+                    file_data, 
+                    config.get('min_string_length', 4),
+                    config.get('max_strings', 500)
+                )
             
-            # Generate threat assessment
-            results['threat_assessment'] = self._assess_threat(results, config)
+            # Pattern detection
+            if config.get('pattern_detection', True):
+                results['patterns'] = self._detect_patterns(file_data, results['strings'])
             
-            return results
-        
+            # File signature analysis
+            if config.get('signature_analysis', True):
+                results['file_signature'] = self._analyze_file_signature(file_data)
+            
+            # Deep analysis
+            if config.get('deep_analysis', True):
+                results['suspicious_indicators'] = self._find_suspicious_indicators(results)
+            
+            # Overall threat assessment
+            results['threat_assessment'] = self._assess_threat_level(results)
+            
         except Exception as e:
-            return {
-                'error': f"Analysis failed: {str(e)}",
-                'filename': filename,
-                'file_size': len(file_data) if file_data else 0,
-                'analysis_time': datetime.now().isoformat()
-            }
-    
-    def _get_default_config(self):
-        """Get default analysis configuration"""
-        return {
-            'hash_analysis': True,
-            'entropy_analysis': True,
-            'string_extraction': True,
-            'pattern_detection': True,
-            'behavioral_analysis': True,
-            'metadata_analysis': True,
-            'max_strings': 200,
-            'min_string_length': 4,
-            'sensitivity_level': 'Medium'
-        }
-    
-    def _analyze_hashes(self, file_data, filename, config):
-        """
-        Calculate and analyze file hashes
+            results['error'] = f"Analysis failed: {str(e)}"
+            results['status'] = 'error'
         
-        Args:
-            file_data (bytes): File content
-            filename (str): File name
-            config (dict): Configuration
-            
-        Returns:
-            dict: Hash analysis results
-        """
+        return results
+    
+    def _analyze_file_info(self, file_data, filename):
+        """Extract basic file information"""
+        file_info = {
+            'original_name': filename,
+            'size_bytes': len(file_data),
+            'size_human': self._format_file_size(len(file_data)),
+            'extension': os.path.splitext(filename)[1].lower() if '.' in filename else '',
+            'analysis_timestamp': datetime.now().isoformat()
+        }
+        
+        # Try to determine file type from content
+        detected_type = self._detect_file_type(file_data)
+        if detected_type:
+            file_info['detected_type'] = detected_type
+        
+        return file_info
+    
+    def _calculate_hashes(self, file_data):
+        """Calculate multiple hash types for the file"""
         hashes = {
             'md5': hashlib.md5(file_data).hexdigest(),
             'sha1': hashlib.sha1(file_data).hexdigest(),
             'sha256': hashlib.sha256(file_data).hexdigest(),
-            'ssdeep': self._calculate_fuzzy_hash(file_data)
+            'sha512': hashlib.sha512(file_data).hexdigest()
         }
         
-        # Check against known malware hashes (placeholder)
-        hash_reputation = self._check_hash_reputation(hashes)
+        # Add SSDEEP if available
+        try:
+            import ssdeep
+            hashes['ssdeep'] = ssdeep.hash(file_data)
+        except ImportError:
+            pass
         
-        return {
-            'hashes': hashes,
-            'hash_reputation': hash_reputation
-        }
+        return hashes
     
-    def _calculate_fuzzy_hash(self, file_data):
-        """
-        Calculate fuzzy hash (simplified implementation)
+    def _analyze_entropy(self, file_data):
+        """Perform comprehensive entropy analysis"""
+        if not file_data:
+            return {'overall_entropy': 0, 'sections': []}
         
-        Args:
-            file_data (bytes): File content
-            
-        Returns:
-            str: Fuzzy hash
-        """
-        # Simplified fuzzy hash implementation
-        # In production, use ssdeep library
-        chunk_size = 64
-        chunks = [file_data[i:i+chunk_size] for i in range(0, len(file_data), chunk_size)]
-        chunk_hashes = [hashlib.md5(chunk).hexdigest()[:8] for chunk in chunks]
-        return ':'.join(chunk_hashes[:10])  # Limit to first 10 chunks
-    
-    def _check_hash_reputation(self, hashes):
-        """
-        Check hash reputation against known databases
-        
-        Args:
-            hashes (dict): File hashes
-            
-        Returns:
-            dict: Reputation information
-        """
-        # Placeholder for hash reputation checking
-        # In production, integrate with threat intelligence feeds
-        return {
-            'known_malware': False,
-            'reputation_score': 0,
-            'sources': []
-        }
-    
-    def _analyze_entropy(self, file_data, filename, config):
-        """
-        Analyze file entropy for encryption/packing detection
-        
-        Args:
-            file_data (bytes): File content
-            filename (str): File name
-            config (dict): Configuration
-            
-        Returns:
-            dict: Entropy analysis results
-        """
         # Calculate overall entropy
         overall_entropy = self._calculate_entropy(file_data)
         
-        # Calculate entropy for different sections
-        section_entropies = []
-        section_size = max(1024, len(file_data) // 10)  # Analyze in 10 sections
+        # Calculate entropy for sections
+        section_size = 1024  # 1KB sections
+        sections = []
         
         for i in range(0, len(file_data), section_size):
-            section = file_data[i:i+section_size]
-            if section:
-                entropy = self._calculate_entropy(section)
-                section_entropies.append({
+            section_data = file_data[i:i+section_size]
+            if len(section_data) > 0:
+                section_entropy = self._calculate_entropy(section_data)
+                sections.append({
                     'offset': i,
-                    'size': len(section),
-                    'entropy': entropy
+                    'size': len(section_data),
+                    'entropy': section_entropy
                 })
         
-        # Analyze entropy distribution
-        entropy_analysis = {
-            'overall_entropy': overall_entropy,
-            'section_entropies': section_entropies,
-            'max_entropy': max(s['entropy'] for s in section_entropies) if section_entropies else 0,
-            'min_entropy': min(s['entropy'] for s in section_entropies) if section_entropies else 0,
-            'entropy_variance': self._calculate_variance([s['entropy'] for s in section_entropies]),
-            'high_entropy_sections': [s for s in section_entropies if s['entropy'] > 7.5],
-            'assessment': self._assess_entropy(overall_entropy, section_entropies)
-        }
+        # Find high entropy sections
+        high_entropy_sections = [s for s in sections if s['entropy'] > 7.5]
         
-        return {'entropy': entropy_analysis}
+        return {
+            'overall_entropy': overall_entropy,
+            'section_count': len(sections),
+            'high_entropy_sections': len(high_entropy_sections),
+            'max_section_entropy': max([s['entropy'] for s in sections]) if sections else 0,
+            'avg_section_entropy': sum([s['entropy'] for s in sections]) / len(sections) if sections else 0,
+            'sections': sections[:50]  # Limit to first 50 sections for performance
+        }
     
     def _calculate_entropy(self, data):
-        """
-        Calculate Shannon entropy of data
-        
-        Args:
-            data (bytes): Data to analyze
-            
-        Returns:
-            float: Entropy value
-        """
+        """Calculate Shannon entropy of data"""
         if not data:
             return 0
         
@@ -274,656 +249,298 @@ class AnalysisEngine:
         
         return entropy
     
-    def _calculate_variance(self, values):
-        """Calculate variance of values"""
-        if not values:
-            return 0
-        
-        mean = sum(values) / len(values)
-        variance = sum((x - mean) ** 2 for x in values) / len(values)
-        return variance
-    
-    def _assess_entropy(self, overall_entropy, section_entropies):
-        """
-        Assess entropy characteristics
-        
-        Args:
-            overall_entropy (float): Overall file entropy
-            section_entropies (list): Section entropy data
-            
-        Returns:
-            dict: Entropy assessment
-        """
-        assessment = {
-            'likely_packed': False,
-            'likely_encrypted': False,
-            'suspicious_sections': [],
-            'confidence': 'low'
-        }
-        
-        # High overall entropy suggests packing/encryption
-        if overall_entropy > 7.5:
-            assessment['likely_packed'] = True
-            assessment['confidence'] = 'high'
-        elif overall_entropy > 7.0:
-            assessment['likely_packed'] = True
-            assessment['confidence'] = 'medium'
-        
-        # Check for encryption indicators
-        high_entropy_sections = [s for s in section_entropies if s['entropy'] > 7.8]
-        if len(high_entropy_sections) > len(section_entropies) * 0.7:
-            assessment['likely_encrypted'] = True
-        
-        # Identify suspicious sections
-        for section in section_entropies:
-            if section['entropy'] > 7.5:
-                assessment['suspicious_sections'].append(section)
-        
-        return assessment
-    
-    def _extract_strings(self, file_data, filename, config):
-        """
-        Extract printable strings from file
-        
-        Args:
-            file_data (bytes): File content
-            filename (str): File name
-            config (dict): Configuration
-            
-        Returns:
-            dict: String extraction results
-        """
-        min_length = config.get('min_string_length', 4)
-        max_count = config.get('max_strings', 200)
+    def _extract_strings(self, file_data, min_length=4, max_count=500):
+        """Extract ASCII and Unicode strings from file data"""
+        ascii_strings = []
+        unicode_strings = []
         
         # Extract ASCII strings
-        ascii_strings = self._extract_ascii_strings(file_data, min_length, max_count)
-        
-        # Extract Unicode strings
-        unicode_strings = self._extract_unicode_strings(file_data, min_length, max_count // 2)
-        
-        # Analyze string characteristics
-        string_analysis = {
-            'ascii_strings': ascii_strings,
-            'unicode_strings': unicode_strings,
-            'total_strings': len(ascii_strings) + len(unicode_strings),
-            'string_statistics': self._analyze_string_statistics(ascii_strings + unicode_strings),
-            'interesting_strings': self._find_interesting_strings(ascii_strings + unicode_strings)
-        }
-        
-        return {'strings': string_analysis}
-    
-    def _extract_ascii_strings(self, data, min_length, max_count):
-        """Extract ASCII strings from data"""
-        strings = []
         current_string = ""
-        
-        for byte in data:
-            if 32 <= byte <= 126:  # Printable ASCII
-                current_string += chr(byte)
+        for byte in file_data:
+            char = chr(byte) if 32 <= byte <= 126 else None
+            if char:
+                current_string += char
             else:
                 if len(current_string) >= min_length:
-                    strings.append(current_string)
-                    if len(strings) >= max_count:
+                    ascii_strings.append(current_string)
+                    if len(ascii_strings) >= max_count // 2:
                         break
                 current_string = ""
         
-        # Add final string if valid
-        if len(current_string) >= min_length and len(strings) < max_count:
-            strings.append(current_string)
+        # Add final ASCII string if valid
+        if len(current_string) >= min_length and len(ascii_strings) < max_count // 2:
+            ascii_strings.append(current_string)
         
-        return strings
-    
-    def _extract_unicode_strings(self, data, min_length, max_count):
-        """Extract Unicode strings from data"""
-        strings = []
-        
-        # Try to decode as UTF-16 LE
+        # Extract Unicode strings (UTF-16)
         try:
-            decoded = data.decode('utf-16le', errors='ignore')
-            unicode_strings = re.findall(r'[^\x00-\x1f\x7f-\x9f]{%d,}' % min_length, decoded)
-            strings.extend(unicode_strings[:max_count])
+            i = 0
+            while i < len(file_data) - 1 and len(unicode_strings) < max_count // 2:
+                try:
+                    # Try to decode as UTF-16LE
+                    char_bytes = file_data[i:i+2]
+                    if len(char_bytes) == 2:
+                        char = char_bytes.decode('utf-16le')
+                        if char.isprintable() and char not in '\r\n\t':
+                            # Start of potential string
+                            j = i + 2
+                            unicode_string = char
+                            while j < len(file_data) - 1:
+                                try:
+                                    next_char_bytes = file_data[j:j+2]
+                                    if len(next_char_bytes) == 2:
+                                        next_char = next_char_bytes.decode('utf-16le')
+                                        if next_char.isprintable() and next_char not in '\r\n\t':
+                                            unicode_string += next_char
+                                            j += 2
+                                        else:
+                                            break
+                                    else:
+                                        break
+                                except:
+                                    break
+                            
+                            if len(unicode_string) >= min_length:
+                                unicode_strings.append(unicode_string)
+                            
+                            i = j
+                        else:
+                            i += 1
+                    else:
+                        i += 1
+                except:
+                    i += 1
         except:
             pass
         
-        return strings
-    
-    def _analyze_string_statistics(self, strings):
-        """Analyze string statistics"""
-        if not strings:
-            return {}
-        
-        lengths = [len(s) for s in strings]
-        
         return {
-            'total_count': len(strings),
-            'average_length': sum(lengths) / len(lengths),
-            'max_length': max(lengths),
-            'min_length': min(lengths),
-            'unique_strings': len(set(strings)),
-            'most_common': Counter(strings).most_common(10)
+            'ascii_strings': ascii_strings,
+            'unicode_strings': unicode_strings,
+            'total_ascii': len(ascii_strings),
+            'total_unicode': len(unicode_strings),
+            'combined': ascii_strings + unicode_strings
         }
     
-    def _find_interesting_strings(self, strings):
-        """Find potentially interesting strings"""
-        interesting = {
-            'file_paths': [],
-            'urls': [],
-            'emails': [],
-            'ip_addresses': [],
-            'registry_keys': [],
-            'api_calls': [],
-            'suspicious_keywords': []
-        }
+    def _detect_patterns(self, file_data, strings_data):
+        """Detect suspicious patterns in file content and strings"""
+        patterns = {}
         
-        # Define patterns
-        patterns = {
-            'urls': re.compile(r'https?://[^\s<>"]+', re.IGNORECASE),
-            'emails': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'),
-            'ip_addresses': re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'),
-            'file_paths': re.compile(r'[A-Za-z]:\\[^<>"|?*\n\r]+', re.IGNORECASE),
-            'registry_keys': re.compile(r'HKEY_[A-Z_]+\\[^<>"|?*\n\r]+', re.IGNORECASE)
-        }
+        # Get all strings for pattern matching
+        all_strings = []
+        if isinstance(strings_data, dict):
+            all_strings.extend(strings_data.get('ascii_strings', []))
+            all_strings.extend(strings_data.get('unicode_strings', []))
+        elif isinstance(strings_data, list):
+            all_strings = strings_data
         
-        # Search for patterns in strings
-        for string in strings:
-            for pattern_name, pattern in patterns.items():
-                matches = pattern.findall(string)
-                if matches:
-                    interesting[pattern_name].extend(matches)
-            
-            # Check for API calls
-            for api in self.suspicious_patterns['suspicious_apis']:
-                if api.lower() in string.lower():
-                    interesting['api_calls'].append(string)
-            
-            # Check for suspicious keywords
-            for keyword in self.suspicious_patterns['crypto_indicators']:
-                if re.search(keyword, string, re.IGNORECASE):
-                    interesting['suspicious_keywords'].append(string)
+        combined_text = ' '.join(all_strings)
         
-        # Remove duplicates and limit results
-        for key in interesting:
-            interesting[key] = list(set(interesting[key]))[:20]
-        
-        return interesting
-    
-    def _detect_patterns(self, file_data, filename, config):
-        """
-        Detect suspicious patterns in file
-        
-        Args:
-            file_data (bytes): File content
-            filename (str): File name
-            config (dict): Configuration
-            
-        Returns:
-            dict: Pattern detection results
-        """
-        detected_patterns = {}
-        
-        # Convert to string for pattern matching
-        try:
-            file_string = file_data.decode('utf-8', errors='ignore')
-        except:
-            file_string = str(file_data)
-        
-        # Check each pattern category
-        for category, patterns in self.suspicious_patterns.items():
-            matches = []
-            
-            for pattern in patterns:
-                if isinstance(pattern, str):
-                    # Simple string search
-                    if pattern.lower() in file_string.lower():
-                        matches.append(pattern)
-                else:
-                    # Regex pattern
-                    try:
-                        regex_matches = re.findall(pattern, file_string, re.IGNORECASE)
-                        matches.extend(regex_matches)
-                    except:
-                        pass
-            
+        # Apply pattern detection
+        for pattern_name, pattern in self.suspicious_patterns.items():
+            matches = pattern.findall(combined_text)
             if matches:
-                detected_patterns[category] = list(set(matches))[:10]  # Limit to 10 matches
+                patterns[pattern_name] = list(set(matches))  # Remove duplicates
         
-        # Analyze file header/signature
-        file_signature = self._analyze_file_signature(file_data)
+        # Apply API pattern detection
+        for api_category, pattern in self.api_patterns.items():
+            matches = pattern.findall(combined_text)
+            if matches:
+                patterns[f'api_{api_category}'] = list(set(matches))
         
-        return {
-            'patterns': detected_patterns,
-            'file_signature': file_signature,
-            'pattern_statistics': self._calculate_pattern_statistics(detected_patterns)
-        }
+        return patterns
     
     def _analyze_file_signature(self, file_data):
-        """Analyze file signature/header"""
+        """Analyze file signature and identify file type"""
         if len(file_data) < 10:
-            return {'type': 'unknown', 'signature': ''}
+            return {'detected_types': [], 'confidence': 'low'}
         
-        # Check common file signatures
-        header = file_data[:10]
+        detected_types = []
         
-        signatures = {
-            b'MZ': 'PE Executable',
-            b'PK': 'ZIP Archive',
-            b'%PDF': 'PDF Document',
-            b'7z\xBC\xAF\x27\x1C': '7-Zip Archive',
-            b'Rar!': 'RAR Archive',
-            b'\x89PNG': 'PNG Image',
-            b'JFIF': 'JPEG Image',
-            b'GIF8': 'GIF Image'
-        }
+        # Check first 512 bytes for signatures
+        header = file_data[:512]
         
-        for sig, file_type in signatures.items():
-            if header.startswith(sig):
-                return {
-                    'type': file_type,
-                    'signature': sig.hex(),
-                    'confidence': 'high'
-                }
+        for file_type, signatures in self.file_signatures.items():
+            for signature in signatures:
+                if signature in header:
+                    detected_types.append(file_type)
+                    break
+        
+        # Additional specific checks
+        if file_data.startswith(b'\x4d\x5a'):  # MZ header
+            # Look for PE signature
+            if b'PE\x00\x00' in file_data[:1024]:
+                if 'pe_executable' not in detected_types:
+                    detected_types.append('pe_executable')
+        
+        confidence = 'high' if detected_types else 'low'
         
         return {
-            'type': 'unknown',
-            'signature': header.hex(),
-            'confidence': 'low'
+            'detected_types': detected_types,
+            'confidence': confidence,
+            'primary_type': detected_types[0] if detected_types else 'unknown'
         }
     
-    def _calculate_pattern_statistics(self, patterns):
-        """Calculate pattern detection statistics"""
-        total_patterns = sum(len(matches) for matches in patterns.values())
+    def _detect_file_type(self, file_data):
+        """Simple file type detection based on content"""
+        if len(file_data) < 4:
+            return 'unknown'
         
-        return {
-            'total_patterns': total_patterns,
-            'categories_detected': len(patterns),
-            'most_common_category': max(patterns.keys(), key=lambda k: len(patterns[k])) if patterns else None,
-            'pattern_density': total_patterns / 1000  # patterns per KB (approximate)
-        }
+        # Check common signatures
+        if file_data.startswith(b'\x4d\x5a'):
+            return 'executable'
+        elif file_data.startswith(b'\x7fELF'):
+            return 'elf_executable'
+        elif file_data.startswith(b'%PDF'):
+            return 'pdf'
+        elif file_data.startswith(b'PK'):
+            return 'archive'
+        elif file_data.startswith(b'\x89PNG'):
+            return 'image'
+        elif file_data.startswith(b'\xff\xd8\xff'):
+            return 'jpeg'
+        elif b'<html' in file_data[:100].lower():
+            return 'html'
+        elif b'<?xml' in file_data[:100]:
+            return 'xml'
+        
+        return 'unknown'
     
-    def _behavioral_analysis(self, file_data, filename, config):
-        """
-        Perform behavioral analysis
+    def _find_suspicious_indicators(self, results):
+        """Find suspicious indicators across all analysis results"""
+        indicators = []
         
-        Args:
-            file_data (bytes): File content
-            filename (str): File name
-            config (dict): Configuration
-            
-        Returns:
-            dict: Behavioral analysis results
-        """
-        behavioral_indicators = {
-            'persistence_mechanisms': [],
-            'network_activity': [],
-            'file_operations': [],
-            'registry_operations': [],
-            'process_operations': [],
-            'evasion_techniques': []
-        }
+        # High entropy indicators
+        entropy_data = results.get('entropy', {})
+        if entropy_data.get('overall_entropy', 0) > 7.5:
+            indicators.append({
+                'type': 'high_entropy',
+                'severity': 'medium',
+                'description': f"High entropy detected ({entropy_data['overall_entropy']:.2f}) - possible encryption or packing"
+            })
         
-        # Convert to string for analysis
-        try:
-            file_string = file_data.decode('utf-8', errors='ignore')
-        except:
-            file_string = str(file_data)
+        # Suspicious patterns
+        patterns = results.get('patterns', {})
+        if patterns.get('bitcoin_addresses'):
+            indicators.append({
+                'type': 'cryptocurrency',
+                'severity': 'high',
+                'description': f"Bitcoin addresses found: {len(patterns['bitcoin_addresses'])}"
+            })
         
-        # Check for persistence mechanisms
-        persistence_patterns = [
-            r'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run',
-            r'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce',
-            r'CreateService',
-            r'OpenService',
-            r'StartService'
-        ]
+        if patterns.get('api_injection_operations'):
+            indicators.append({
+                'type': 'code_injection',
+                'severity': 'high',
+                'description': "Code injection APIs detected"
+            })
         
-        for pattern in persistence_patterns:
-            if re.search(pattern, file_string, re.IGNORECASE):
-                behavioral_indicators['persistence_mechanisms'].append(pattern)
+        if patterns.get('api_persistence_operations'):
+            indicators.append({
+                'type': 'persistence',
+                'severity': 'medium',
+                'description': "Persistence mechanism APIs detected"
+            })
         
-        # Check for network activity indicators
-        network_patterns = [
-            r'InternetOpen',
-            r'InternetConnect',
-            r'HttpOpenRequest',
-            r'socket',
-            r'connect',
-            r'send',
-            r'recv'
-        ]
+        # File signature mismatches
+        file_info = results.get('file_info', {})
+        signature_info = results.get('file_signature', {})
         
-        for pattern in network_patterns:
-            if re.search(pattern, file_string, re.IGNORECASE):
-                behavioral_indicators['network_activity'].append(pattern)
+        file_ext = file_info.get('extension', '').lower()
+        detected_type = signature_info.get('primary_type', 'unknown')
         
-        # Check for file operations
-        file_patterns = [
-            r'CreateFile',
-            r'WriteFile',
-            r'ReadFile',
-            r'DeleteFile',
-            r'CopyFile',
-            r'MoveFile'
-        ]
+        if file_ext == '.pdf' and detected_type != 'pdf':
+            indicators.append({
+                'type': 'signature_mismatch',
+                'severity': 'medium',
+                'description': f"File extension ({file_ext}) doesn't match detected type ({detected_type})"
+            })
         
-        for pattern in file_patterns:
-            if re.search(pattern, file_string, re.IGNORECASE):
-                behavioral_indicators['file_operations'].append(pattern)
+        # Large number of suspicious strings
+        strings_data = results.get('strings', {})
+        total_strings = strings_data.get('total_ascii', 0) + strings_data.get('total_unicode', 0)
         
-        # Check for evasion techniques
-        evasion_patterns = [
-            r'VirtualAlloc',
-            r'VirtualProtect',
-            r'CreateRemoteThread',
-            r'WriteProcessMemory',
-            r'SetWindowsHookEx',
-            r'GetProcAddress'
-        ]
+        if total_strings > 1000:
+            indicators.append({
+                'type': 'excessive_strings',
+                'severity': 'low',
+                'description': f"Large number of strings found ({total_strings}) - possible obfuscation"
+            })
         
-        for pattern in evasion_patterns:
-            if re.search(pattern, file_string, re.IGNORECASE):
-                behavioral_indicators['evasion_techniques'].append(pattern)
-        
-        # Calculate behavioral score
-        behavioral_score = self._calculate_behavioral_score(behavioral_indicators)
-        
-        return {
-            'behavioral': {
-                'indicators': behavioral_indicators,
-                'score': behavioral_score,
-                'risk_level': self._assess_behavioral_risk(behavioral_score)
-            }
-        }
+        return indicators
     
-    def _calculate_behavioral_score(self, indicators):
-        """Calculate behavioral analysis score"""
+    def _assess_threat_level(self, results):
+        """Assess overall threat level based on analysis results"""
         score = 0
+        reasons = []
         
-        # Weight different categories
-        weights = {
-            'persistence_mechanisms': 30,
-            'network_activity': 20,
-            'file_operations': 10,
-            'registry_operations': 15,
-            'process_operations': 20,
-            'evasion_techniques': 40
-        }
+        # Entropy-based scoring
+        entropy_data = results.get('entropy', {})
+        entropy_value = entropy_data.get('overall_entropy', 0)
         
-        for category, weight in weights.items():
-            if indicators.get(category):
-                score += min(len(indicators[category]) * weight, weight * 2)
+        if entropy_value > 7.5:
+            score += 30
+            reasons.append(f"High entropy ({entropy_value:.2f}) suggests encryption/packing")
+        elif entropy_value > 6.5:
+            score += 15
+            reasons.append(f"Moderate entropy ({entropy_value:.2f})")
         
-        return min(score, 100)
-    
-    def _assess_behavioral_risk(self, score):
-        """Assess behavioral risk level"""
-        if score >= 80:
-            return 'CRITICAL'
-        elif score >= 60:
-            return 'HIGH'
-        elif score >= 40:
-            return 'MEDIUM'
-        else:
-            return 'LOW'
-    
-    def _analyze_metadata(self, file_data, filename, config):
-        """
-        Analyze file metadata
+        # Pattern-based scoring
+        patterns = results.get('patterns', {})
         
-        Args:
-            file_data (bytes): File content
-            filename (str): File name
-            config (dict): Configuration
-            
-        Returns:
-            dict: Metadata analysis results
-        """
-        metadata = {
-            'filename_analysis': self._analyze_filename(filename),
-            'file_size_analysis': self._analyze_file_size(len(file_data)),
-            'creation_indicators': self._analyze_creation_indicators(file_data),
-            'compilation_indicators': self._analyze_compilation_indicators(file_data)
-        }
+        if patterns.get('bitcoin_addresses'):
+            score += 40
+            reasons.append("Cryptocurrency addresses found")
         
-        return {'metadata': metadata}
-    
-    def _analyze_filename(self, filename):
-        """Analyze filename for suspicious characteristics"""
-        suspicious_extensions = [
-            '.exe', '.scr', '.bat', '.cmd', '.com', '.pif', '.vbs', '.js', '.jar'
-        ]
+        if patterns.get('api_injection_operations'):
+            score += 50
+            reasons.append("Code injection APIs detected")
         
-        double_extensions = re.findall(r'\.[a-zA-Z0-9]+\.[a-zA-Z0-9]+$', filename)
+        if patterns.get('api_debug_operations'):
+            score += 20
+            reasons.append("Anti-debugging techniques detected")
         
-        analysis = {
-            'suspicious_extension': any(filename.lower().endswith(ext) for ext in suspicious_extensions),
-            'double_extension': bool(double_extensions),
-            'length': len(filename),
-            'has_spaces': ' ' in filename,
-            'has_unicode': any(ord(c) > 127 for c in filename),
-            'suspicious_keywords': []
-        }
+        if patterns.get('api_persistence_operations'):
+            score += 30
+            reasons.append("Persistence mechanisms detected")
         
-        # Check for suspicious keywords in filename
-        suspicious_keywords = [
-            'crack', 'keygen', 'patch', 'hack', 'cheat', 'bot', 'rat', 'trojan',
-            'virus', 'malware', 'backdoor', 'rootkit', 'ransomware'
-        ]
+        if patterns.get('base64_data'):
+            score += 10
+            reasons.append("Base64 encoded data found")
         
-        for keyword in suspicious_keywords:
-            if keyword in filename.lower():
-                analysis['suspicious_keywords'].append(keyword)
+        # Suspicious indicators scoring
+        indicators = results.get('suspicious_indicators', [])
+        high_severity_count = len([i for i in indicators if i.get('severity') == 'high'])
+        medium_severity_count = len([i for i in indicators if i.get('severity') == 'medium'])
         
-        return analysis
-    
-    def _analyze_file_size(self, file_size):
-        """Analyze file size characteristics"""
-        return {
-            'size_bytes': file_size,
-            'size_category': self._categorize_file_size(file_size),
-            'suspicious_size': self._is_suspicious_size(file_size)
-        }
-    
-    def _categorize_file_size(self, size):
-        """Categorize file size"""
-        if size < 1024:
-            return 'tiny'
-        elif size < 10240:
-            return 'small'
-        elif size < 102400:
-            return 'medium'
-        elif size < 1048576:
-            return 'large'
-        else:
-            return 'very_large'
-    
-    def _is_suspicious_size(self, size):
-        """Check if file size is suspicious"""
-        # Very small executables might be suspicious
-        if size < 1024:
-            return True
-        
-        # Very large files might be suspicious
-        if size > 50 * 1024 * 1024:  # 50MB
-            return True
-        
-        return False
-    
-    def _analyze_creation_indicators(self, file_data):
-        """Analyze file creation indicators"""
-        indicators = {
-            'build_tools': [],
-            'compiler_strings': [],
-            'development_artifacts': []
-        }
-        
-        # Convert to string for analysis
-        try:
-            file_string = file_data.decode('utf-8', errors='ignore')
-        except:
-            file_string = str(file_data)
-        
-        # Check for build tools
-        build_tools = [
-            'Microsoft Visual Studio', 'GCC', 'Clang', 'MinGW',
-            'Delphi', 'Borland', 'AutoIt', 'NSIS', 'Inno Setup'
-        ]
-        
-        for tool in build_tools:
-            if tool in file_string:
-                indicators['build_tools'].append(tool)
-        
-        return indicators
-    
-    def _analyze_compilation_indicators(self, file_data):
-        """Analyze compilation indicators"""
-        # This is a simplified analysis
-        # In production, use proper PE parsing libraries
-        
-        indicators = {
-            'likely_compiled': False,
-            'compiler_version': None,
-            'build_timestamp': None,
-            'debug_info': False
-        }
-        
-        # Check for PE header
-        if len(file_data) > 64 and file_data[:2] == b'MZ':
-            indicators['likely_compiled'] = True
-            
-            # Look for debug information
-            if b'debug' in file_data.lower() or b'pdb' in file_data.lower():
-                indicators['debug_info'] = True
-        
-        return indicators
-    
-    def _assess_threat(self, results, config):
-        """
-        Assess overall threat level based on analysis results
-        
-        Args:
-            results (dict): Analysis results
-            config (dict): Configuration
-            
-        Returns:
-            dict: Threat assessment
-        """
-        threat_score = 0
-        threat_reasons = []
-        
-        # Entropy analysis
-        if 'entropy' in results:
-            entropy_data = results['entropy']
-            if entropy_data.get('overall_entropy', 0) > 7.5:
-                threat_score += 30
-                threat_reasons.append("High entropy detected - possible encryption/packing")
-            elif entropy_data.get('overall_entropy', 0) > 7.0:
-                threat_score += 15
-                threat_reasons.append("Moderate entropy detected")
-        
-        # Pattern detection
-        if 'patterns' in results:
-            pattern_data = results['patterns']
-            if pattern_data.get('suspicious_apis'):
-                threat_score += 25
-                threat_reasons.append("Suspicious API calls detected")
-            
-            if pattern_data.get('crypto_indicators'):
-                threat_score += 20
-                threat_reasons.append("Cryptocurrency-related strings found")
-            
-            if pattern_data.get('network_indicators'):
-                threat_score += 15
-                threat_reasons.append("Network activity indicators found")
-        
-        # Behavioral analysis
-        if 'behavioral' in results:
-            behavioral_score = results['behavioral'].get('score', 0)
-            if behavioral_score >= 60:
-                threat_score += 30
-                threat_reasons.append("High behavioral risk score")
-            elif behavioral_score >= 40:
-                threat_score += 20
-                threat_reasons.append("Medium behavioral risk score")
-        
-        # String analysis
-        if 'strings' in results:
-            string_data = results['strings']
-            interesting = string_data.get('interesting_strings', {})
-            
-            if interesting.get('suspicious_keywords'):
-                threat_score += 15
-                threat_reasons.append("Suspicious keywords in strings")
-            
-            if interesting.get('registry_keys'):
-                threat_score += 10
-                threat_reasons.append("Registry operations detected")
-        
-        # Metadata analysis
-        if 'metadata' in results:
-            metadata = results['metadata']
-            filename_analysis = metadata.get('filename_analysis', {})
-            
-            if filename_analysis.get('suspicious_extension'):
-                threat_score += 10
-                threat_reasons.append("Suspicious file extension")
-            
-            if filename_analysis.get('double_extension'):
-                threat_score += 15
-                threat_reasons.append("Double file extension detected")
-            
-            if filename_analysis.get('suspicious_keywords'):
-                threat_score += 10
-                threat_reasons.append("Suspicious keywords in filename")
+        score += high_severity_count * 25
+        score += medium_severity_count * 10
         
         # Determine threat level
-        if threat_score >= 80:
+        if score >= 80:
             level = 'CRITICAL'
-        elif threat_score >= 60:
+        elif score >= 60:
             level = 'HIGH'
-        elif threat_score >= 40:
+        elif score >= 30:
             level = 'MEDIUM'
-        else:
+        elif score >= 10:
             level = 'LOW'
+        else:
+            level = 'CLEAN'
         
         return {
             'level': level,
-            'score': min(threat_score, 100),
-            'reasons': threat_reasons,
-            'confidence': self._calculate_confidence(results),
-            'recommendation': self._get_recommendation(level, threat_score)
+            'score': min(score, 100),  # Cap at 100
+            'reasons': reasons,
+            'confidence': 'high' if score >= 50 else 'medium' if score >= 20 else 'low'
         }
     
-    def _calculate_confidence(self, results):
-        """Calculate confidence level of the analysis"""
-        factors = 0
+    def _format_file_size(self, size_bytes):
+        """Format file size in human readable format"""
+        if size_bytes == 0:
+            return "0 B"
         
-        # More analysis modules increase confidence
-        if 'hashes' in results:
-            factors += 1
-        if 'entropy' in results:
-            factors += 1
-        if 'strings' in results:
-            factors += 1
-        if 'patterns' in results:
-            factors += 1
-        if 'behavioral' in results:
-            factors += 1
+        size_names = ["B", "KB", "MB", "GB", "TB"]
+        i = int(math.floor(math.log(size_bytes, 1024)))
+        p = math.pow(1024, i)
+        s = round(size_bytes / p, 2)
         
-        if factors >= 4:
-            return 'high'
-        elif factors >= 2:
-            return 'medium'
-        else:
-            return 'low'
-    
-    def _get_recommendation(self, level, score):
-        """Get recommendation based on threat level"""
-        recommendations = {
-            'CRITICAL': "Do not execute this file. It shows multiple indicators of malicious behavior. Consider submitting to security vendors for analysis.",
-            'HIGH': "Exercise extreme caution. This file exhibits suspicious characteristics and should be analyzed in a controlled environment.",
-            'MEDIUM': "This file shows some suspicious indicators. Verify its source and consider additional analysis before use.",
-            'LOW': "File appears to be relatively safe, but always exercise caution with unknown files."
-        }
-        
-        return recommendations.get(level, "Unable to determine safety level.")
+        return f"{s} {size_names[i]}"

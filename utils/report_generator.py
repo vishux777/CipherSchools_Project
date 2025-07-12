@@ -1,571 +1,698 @@
 """
-Report Generation Module
-Generate comprehensive malware analysis reports
+Report Generator Module
+
+Generates comprehensive analysis reports in multiple formats including
+JSON, HTML, and text summaries for malware analysis results.
 """
 
 import json
-import csv
-import io
-import base64
+import os
 from datetime import datetime
-import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
+from typing import Dict, Any, List
+import base64
 
 class ReportGenerator:
     """
-    Generate comprehensive analysis reports in various formats
+    Comprehensive report generator for malware analysis results
     """
     
     def __init__(self):
         """Initialize the report generator"""
-        self.report_template = {
-            'version': '1.0',
-            'generator': 'MalwareShield Pro',
-            'created_by': 'vishux777'
-        }
+        self.report_template = self._load_report_template()
+        
+    def _load_report_template(self):
+        """Load HTML report template"""
+        return """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>MalwareShield Pro - Analysis Report</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                    padding: 20px;
+                    background-color: #0e1117;
+                    color: #fafafa;
+                    line-height: 1.6;
+                }
+                .container {
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    background-color: #262730;
+                    padding: 30px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                }
+                .header {
+                    text-align: center;
+                    border-bottom: 2px solid #444;
+                    padding-bottom: 20px;
+                    margin-bottom: 30px;
+                }
+                .threat-critical { background: linear-gradient(90deg, #8B0000, #DC143C); }
+                .threat-high { background: linear-gradient(90deg, #FF4500, #FF6347); }
+                .threat-medium { background: linear-gradient(90deg, #FF8C00, #FFA500); }
+                .threat-low { background: linear-gradient(90deg, #228B22, #32CD32); }
+                .threat-clean { background: linear-gradient(90deg, #228B22, #32CD32); }
+                
+                .threat-banner {
+                    padding: 15px;
+                    border-radius: 10px;
+                    color: white;
+                    font-weight: bold;
+                    text-align: center;
+                    margin: 20px 0;
+                    font-size: 1.2em;
+                }
+                .section {
+                    margin: 30px 0;
+                    background-color: #1a1d29;
+                    padding: 20px;
+                    border-radius: 8px;
+                    border-left: 4px solid #00aaff;
+                }
+                .section h2 {
+                    color: #00aaff;
+                    margin-top: 0;
+                }
+                .grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 20px;
+                    margin: 20px 0;
+                }
+                .metric {
+                    background-color: #262730;
+                    padding: 15px;
+                    border-radius: 8px;
+                    border: 1px solid #444;
+                }
+                .metric h3 {
+                    margin: 0 0 10px 0;
+                    color: #00aaff;
+                }
+                .code-block {
+                    background-color: #1a1d29;
+                    padding: 15px;
+                    border-radius: 5px;
+                    border: 1px solid #444;
+                    font-family: 'Courier New', monospace;
+                    white-space: pre-wrap;
+                    overflow-x: auto;
+                    margin: 10px 0;
+                }
+                .warning {
+                    background-color: #2d1b1b;
+                    border-left: 4px solid #ff4444;
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 5px;
+                }
+                .info {
+                    background-color: #1b2d3a;
+                    border-left: 4px solid #4444ff;
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 5px;
+                }
+                .success {
+                    background-color: #1b2d1b;
+                    border-left: 4px solid #44ff44;
+                    padding: 15px;
+                    margin: 10px 0;
+                    border-radius: 5px;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 20px 0;
+                }
+                th, td {
+                    padding: 12px;
+                    text-align: left;
+                    border-bottom: 1px solid #444;
+                }
+                th {
+                    background-color: #1a1d29;
+                    color: #00aaff;
+                }
+                .footer {
+                    text-align: center;
+                    margin-top: 40px;
+                    padding-top: 20px;
+                    border-top: 1px solid #444;
+                    color: #888;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                {content}
+            </div>
+        </body>
+        </html>
+        """
     
-    def generate_comprehensive_report(self, analysis_results):
+    def generate_report(self, analysis_results: Dict[str, Any], format_type: str = "comprehensive") -> Dict[str, Any]:
         """
         Generate a comprehensive analysis report
         
         Args:
             analysis_results (dict): Complete analysis results
+            format_type (str): Type of report to generate
             
         Returns:
-            dict: Formatted report
+            dict: Generated report data
         """
         try:
-            report = {
-                **self.report_template,
-                'report_id': self._generate_report_id(),
-                'generated_at': datetime.now().isoformat(),
+            report_data = {
+                'metadata': self._generate_metadata(analysis_results),
                 'executive_summary': self._generate_executive_summary(analysis_results),
-                'file_information': self._extract_file_information(analysis_results),
-                'threat_assessment': self._format_threat_assessment(analysis_results),
-                'technical_analysis': self._format_technical_analysis(analysis_results),
-                'indicators_of_compromise': self._extract_iocs(analysis_results),
+                'technical_details': self._generate_technical_details(analysis_results),
+                'threat_assessment': self._generate_threat_assessment(analysis_results),
                 'recommendations': self._generate_recommendations(analysis_results),
-                'analysis_metadata': self._extract_analysis_metadata(analysis_results)
+                'appendix': self._generate_appendix(analysis_results)
             }
             
-            return report
-        
+            if format_type == "comprehensive":
+                return report_data
+            elif format_type == "summary":
+                return {
+                    'metadata': report_data['metadata'],
+                    'executive_summary': report_data['executive_summary'],
+                    'threat_assessment': report_data['threat_assessment']
+                }
+            else:
+                return report_data
+                
         except Exception as e:
             return {
                 'error': f"Failed to generate report: {str(e)}",
-                'partial_data': analysis_results
+                'status': 'error'
             }
     
-    def _generate_report_id(self):
-        """Generate unique report ID"""
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        return f"MSP_{timestamp}"
+    def _generate_metadata(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate report metadata"""
+        return {
+            'report_id': f"MSP_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            'generated_at': datetime.now().isoformat(),
+            'analyzer_version': "MalwareShield Pro v1.0",
+            'file_info': {
+                'filename': results.get('filename', 'Unknown'),
+                'file_size': results.get('file_size', 0),
+                'file_size_human': self._format_file_size(results.get('file_size', 0)),
+                'analysis_time': results.get('analysis_time', datetime.now().isoformat())
+            },
+            'analysis_engines': self._get_analysis_engines(results)
+        }
     
-    def _generate_executive_summary(self, results):
+    def _generate_executive_summary(self, results: Dict[str, Any]) -> Dict[str, Any]:
         """Generate executive summary"""
         threat_assessment = results.get('threat_assessment', {})
+        threat_level = threat_assessment.get('level', 'UNKNOWN')
+        threat_score = threat_assessment.get('score', 0)
         
-        summary = {
-            'threat_level': threat_assessment.get('level', 'Unknown'),
-            'risk_score': threat_assessment.get('score', 0),
-            'key_findings': [],
-            'immediate_actions': []
-        }
-        
-        # Extract key findings
-        if threat_assessment.get('reasons'):
-            summary['key_findings'] = threat_assessment['reasons'][:5]  # Top 5 findings
-        
-        # Generate immediate actions based on threat level
-        threat_level = threat_assessment.get('level', 'LOW')
-        if threat_level == 'CRITICAL':
-            summary['immediate_actions'] = [
-                "Do not execute this file",
-                "Isolate the file immediately",
-                "Perform full system scan",
-                "Submit to security vendors for analysis"
-            ]
-        elif threat_level == 'HIGH':
-            summary['immediate_actions'] = [
-                "Exercise extreme caution",
-                "Analyze in controlled environment",
-                "Verify file source",
-                "Consider additional analysis"
-            ]
+        # Determine risk summary
+        if threat_level in ['CRITICAL', 'HIGH']:
+            risk_summary = "This file poses a significant security risk and should be quarantined immediately."
+            action_required = "IMMEDIATE ACTION REQUIRED"
         elif threat_level == 'MEDIUM':
-            summary['immediate_actions'] = [
-                "Verify file source and integrity",
-                "Consider additional scanning",
-                "Monitor for suspicious behavior"
-            ]
+            risk_summary = "This file exhibits suspicious characteristics and should be investigated further."
+            action_required = "INVESTIGATION RECOMMENDED"
         else:
-            summary['immediate_actions'] = [
-                "File appears safe but remain cautious",
-                "Regular monitoring recommended"
-            ]
+            risk_summary = "This file appears to be clean with minimal security concerns."
+            action_required = "NO IMMEDIATE ACTION REQUIRED"
         
-        return summary
-    
-    def _extract_file_information(self, results):
-        """Extract file information for report"""
-        file_info = {
-            'filename': results.get('filename', 'Unknown'),
-            'file_size': results.get('file_size', 0),
-            'file_size_formatted': self._format_file_size(results.get('file_size', 0)),
-            'analysis_time': results.get('analysis_time', ''),
-            'analysis_duration': results.get('analysis_duration', 0)
+        # Count detections
+        virustotal_results = results.get('virustotal', {})
+        vt_detections = 0
+        if 'stats' in virustotal_results:
+            vt_detections = virustotal_results['stats'].get('malicious', 0)
+        
+        return {
+            'threat_level': threat_level,
+            'threat_score': threat_score,
+            'risk_summary': risk_summary,
+            'action_required': action_required,
+            'key_findings': self._extract_key_findings(results),
+            'detection_summary': {
+                'virustotal_detections': vt_detections,
+                'suspicious_patterns': len(results.get('patterns', {})),
+                'threat_indicators': len(results.get('suspicious_indicators', []))
+            }
         }
-        
-        # Add hash information
-        if 'hashes' in results:
-            file_info['hashes'] = results['hashes']
-        
-        # Add file signature
-        if 'patterns' in results and 'file_signature' in results['patterns']:
-            file_info['file_signature'] = results['patterns']['file_signature']
-        
-        return file_info
     
-    def _format_file_size(self, size_bytes):
+    def _generate_technical_details(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate technical analysis details"""
+        return {
+            'file_hashes': results.get('hashes', {}),
+            'entropy_analysis': results.get('entropy', {}),
+            'file_signature': results.get('file_signature', {}),
+            'string_analysis': self._summarize_strings(results.get('strings', {})),
+            'pattern_detection': results.get('patterns', {}),
+            'suspicious_indicators': results.get('suspicious_indicators', []),
+            'virustotal_analysis': self._summarize_virustotal(results.get('virustotal', {}))
+        }
+    
+    def _generate_threat_assessment(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate detailed threat assessment"""
+        threat_data = results.get('threat_assessment', {})
+        
+        return {
+            'overall_assessment': threat_data,
+            'threat_vectors': self._identify_threat_vectors(results),
+            'behavioral_indicators': self._extract_behavioral_indicators(results),
+            'attribution_hints': self._extract_attribution_hints(results),
+            'severity_breakdown': self._calculate_severity_breakdown(results)
+        }
+    
+    def _generate_recommendations(self, results: Dict[str, Any]) -> List[Dict[str, str]]:
+        """Generate security recommendations"""
+        recommendations = []
+        threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
+        
+        if threat_level in ['CRITICAL', 'HIGH']:
+            recommendations.extend([
+                {
+                    'priority': 'HIGH',
+                    'action': 'Immediate Quarantine',
+                    'description': 'Isolate this file immediately and prevent execution'
+                },
+                {
+                    'priority': 'HIGH',
+                    'action': 'Network Monitoring',
+                    'description': 'Monitor network traffic for signs of compromise'
+                },
+                {
+                    'priority': 'MEDIUM',
+                    'action': 'System Scan',
+                    'description': 'Perform full system scan to check for related threats'
+                }
+            ])
+        
+        if threat_level == 'MEDIUM':
+            recommendations.extend([
+                {
+                    'priority': 'MEDIUM',
+                    'action': 'Further Analysis',
+                    'description': 'Submit to additional analysis engines for verification'
+                },
+                {
+                    'priority': 'LOW',
+                    'action': 'Sandboxing',
+                    'description': 'Execute in isolated environment for behavioral analysis'
+                }
+            ])
+        
+        # Add pattern-specific recommendations
+        patterns = results.get('patterns', {})
+        if patterns.get('bitcoin_addresses'):
+            recommendations.append({
+                'priority': 'HIGH',
+                'action': 'Cryptocurrency Monitoring',
+                'description': 'Monitor for unauthorized cryptocurrency transactions'
+            })
+        
+        if patterns.get('api_injection_operations'):
+            recommendations.append({
+                'priority': 'HIGH',
+                'action': 'Process Monitoring',
+                'description': 'Monitor for process injection and code modification attempts'
+            })
+        
+        return recommendations
+    
+    def _generate_appendix(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate appendix with detailed technical data"""
+        return {
+            'raw_strings': self._format_strings_for_report(results.get('strings', {})),
+            'pattern_matches': results.get('patterns', {}),
+            'entropy_details': results.get('entropy', {}),
+            'virustotal_raw': results.get('virustotal', {}),
+            'analysis_metadata': {
+                'total_analysis_time': 'N/A',  # Could be calculated if tracked
+                'engines_used': self._get_analysis_engines(results),
+                'confidence_level': results.get('threat_assessment', {}).get('confidence', 'unknown')
+            }
+        }
+    
+    def export_json(self, results: Dict[str, Any], pretty: bool = True) -> str:
+        """
+        Export results as JSON
+        
+        Args:
+            results (dict): Analysis results
+            pretty (bool): Whether to format JSON nicely
+            
+        Returns:
+            str: JSON formatted results
+        """
+        try:
+            if pretty:
+                return json.dumps(results, indent=2, default=str, ensure_ascii=False)
+            else:
+                return json.dumps(results, default=str, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({'error': f'JSON export failed: {str(e)}'}, indent=2)
+    
+    def export_html(self, results: Dict[str, Any]) -> str:
+        """
+        Export results as HTML report
+        
+        Args:
+            results (dict): Analysis results
+            
+        Returns:
+            str: HTML formatted report
+        """
+        try:
+            report_data = self.generate_report(results)
+            html_content = self._build_html_content(report_data, results)
+            return self.report_template.format(content=html_content)
+        except Exception as e:
+            return f"<html><body><h1>Report Generation Error</h1><p>{str(e)}</p></body></html>"
+    
+    def export_text_summary(self, results: Dict[str, Any]) -> str:
+        """
+        Export results as plain text summary
+        
+        Args:
+            results (dict): Analysis results
+            
+        Returns:
+            str: Text formatted summary
+        """
+        try:
+            report_data = self.generate_report(results, "summary")
+            
+            summary = []
+            summary.append("=" * 60)
+            summary.append("MALWARESHIELD PRO - ANALYSIS REPORT")
+            summary.append("=" * 60)
+            summary.append("")
+            
+            # Metadata
+            metadata = report_data['metadata']
+            summary.append(f"Report ID: {metadata['report_id']}")
+            summary.append(f"Generated: {metadata['generated_at']}")
+            summary.append(f"File: {metadata['file_info']['filename']}")
+            summary.append(f"Size: {metadata['file_info']['file_size_human']}")
+            summary.append("")
+            
+            # Executive Summary
+            exec_summary = report_data['executive_summary']
+            summary.append("THREAT ASSESSMENT:")
+            summary.append("-" * 20)
+            summary.append(f"Threat Level: {exec_summary['threat_level']}")
+            summary.append(f"Threat Score: {exec_summary['threat_score']}/100")
+            summary.append(f"Risk Summary: {exec_summary['risk_summary']}")
+            summary.append(f"Action Required: {exec_summary['action_required']}")
+            summary.append("")
+            
+            # Key Findings
+            if exec_summary['key_findings']:
+                summary.append("KEY FINDINGS:")
+                summary.append("-" * 15)
+                for finding in exec_summary['key_findings']:
+                    summary.append(f"• {finding}")
+                summary.append("")
+            
+            # Detection Summary
+            detection = exec_summary['detection_summary']
+            summary.append("DETECTION SUMMARY:")
+            summary.append("-" * 20)
+            summary.append(f"VirusTotal Detections: {detection['virustotal_detections']}")
+            summary.append(f"Suspicious Patterns: {detection['suspicious_patterns']}")
+            summary.append(f"Threat Indicators: {detection['threat_indicators']}")
+            summary.append("")
+            
+            summary.append("=" * 60)
+            summary.append("End of Report")
+            summary.append("=" * 60)
+            
+            return "\n".join(summary)
+            
+        except Exception as e:
+            return f"Text export failed: {str(e)}"
+    
+    def _build_html_content(self, report_data: Dict[str, Any], raw_results: Dict[str, Any]) -> str:
+        """Build HTML content for the report"""
+        content = []
+        
+        # Header
+        metadata = report_data['metadata']
+        content.append(f"""
+        <div class="header">
+            <h1>🛡️ MalwareShield Pro</h1>
+            <h2>Advanced Threat Analysis Report</h2>
+            <p><strong>Report ID:</strong> {metadata['report_id']}</p>
+            <p><strong>Generated:</strong> {metadata['generated_at']}</p>
+        </div>
+        """)
+        
+        # Threat Banner
+        exec_summary = report_data['executive_summary']
+        threat_level = exec_summary['threat_level'].lower()
+        content.append(f"""
+        <div class="threat-banner threat-{threat_level}">
+            🚨 THREAT LEVEL: {exec_summary['threat_level']} - Score: {exec_summary['threat_score']}/100
+        </div>
+        """)
+        
+        # File Information
+        file_info = metadata['file_info']
+        content.append(f"""
+        <div class="section">
+            <h2>📄 File Information</h2>
+            <div class="grid">
+                <div class="metric">
+                    <h3>File Name</h3>
+                    <p>{file_info['filename']}</p>
+                </div>
+                <div class="metric">
+                    <h3>File Size</h3>
+                    <p>{file_info['file_size_human']} ({file_info['file_size']} bytes)</p>
+                </div>
+                <div class="metric">
+                    <h3>Analysis Time</h3>
+                    <p>{file_info['analysis_time']}</p>
+                </div>
+            </div>
+        </div>
+        """)
+        
+        # Executive Summary
+        content.append(f"""
+        <div class="section">
+            <h2>📊 Executive Summary</h2>
+            <div class="{'warning' if threat_level in ['critical', 'high'] else 'info' if threat_level == 'medium' else 'success'}">
+                <strong>Risk Summary:</strong> {exec_summary['risk_summary']}<br>
+                <strong>Action Required:</strong> {exec_summary['action_required']}
+            </div>
+        </div>
+        """)
+        
+        # Key Findings
+        if exec_summary['key_findings']:
+            findings_html = "<ul>"
+            for finding in exec_summary['key_findings']:
+                findings_html += f"<li>{finding}</li>"
+            findings_html += "</ul>"
+            
+            content.append(f"""
+            <div class="section">
+                <h2>🔍 Key Findings</h2>
+                {findings_html}
+            </div>
+            """)
+        
+        # Technical Details
+        tech_details = report_data['technical_details']
+        if tech_details.get('file_hashes'):
+            hashes_html = ""
+            for hash_type, hash_value in tech_details['file_hashes'].items():
+                hashes_html += f"<div class='metric'><h3>{hash_type.upper()}</h3><p style='font-family: monospace; word-break: break-all;'>{hash_value}</p></div>"
+            
+            content.append(f"""
+            <div class="section">
+                <h2>🔐 File Hashes</h2>
+                <div class="grid">
+                    {hashes_html}
+                </div>
+            </div>
+            """)
+        
+        # Recommendations
+        recommendations = report_data['recommendations']
+        if recommendations:
+            rec_html = "<table><tr><th>Priority</th><th>Action</th><th>Description</th></tr>"
+            for rec in recommendations:
+                priority_color = '#ff4444' if rec['priority'] == 'HIGH' else '#ffaa44' if rec['priority'] == 'MEDIUM' else '#44ff44'
+                rec_html += f"<tr><td style='color: {priority_color}; font-weight: bold;'>{rec['priority']}</td><td>{rec['action']}</td><td>{rec['description']}</td></tr>"
+            rec_html += "</table>"
+            
+            content.append(f"""
+            <div class="section">
+                <h2>⚡ Recommendations</h2>
+                {rec_html}
+            </div>
+            """)
+        
+        # Footer
+        content.append(f"""
+        <div class="footer">
+            <p>Generated by MalwareShield Pro v1.0 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p><small>This report is confidential and should be handled according to your organization's security policies.</small></p>
+        </div>
+        """)
+        
+        return "".join(content)
+    
+    # Helper methods
+    def _format_file_size(self, size_bytes: int) -> str:
         """Format file size in human readable format"""
         if size_bytes == 0:
             return "0 B"
         
-        size_names = ["B", "KB", "MB", "GB"]
-        i = 0
-        while size_bytes >= 1024 and i < len(size_names) - 1:
-            size_bytes /= 1024
-            i += 1
+        size_names = ["B", "KB", "MB", "GB", "TB"]
+        i = int(math.floor(math.log(size_bytes, 1024)))
+        p = math.pow(1024, i)
+        s = round(size_bytes / p, 2)
         
-        return f"{size_bytes:.2f} {size_names[i]}"
+        return f"{s} {size_names[i]}"
     
-    def _format_threat_assessment(self, results):
-        """Format threat assessment for report"""
-        threat_assessment = results.get('threat_assessment', {})
+    def _get_analysis_engines(self, results: Dict[str, Any]) -> List[str]:
+        """Get list of analysis engines used"""
+        engines = ["Static Analysis Engine"]
         
-        formatted = {
-            'overall_threat_level': threat_assessment.get('level', 'Unknown'),
-            'risk_score': threat_assessment.get('score', 0),
-            'confidence_level': threat_assessment.get('confidence', 'Unknown'),
-            'threat_indicators': threat_assessment.get('reasons', []),
-            'recommendation': threat_assessment.get('recommendation', ''),
-            'risk_breakdown': self._calculate_risk_breakdown(results)
-        }
+        if 'virustotal' in results and 'error' not in results['virustotal']:
+            engines.append("VirusTotal")
         
-        return formatted
-    
-    def _calculate_risk_breakdown(self, results):
-        """Calculate risk breakdown by category"""
-        breakdown = {
-            'entropy_risk': 0,
-            'pattern_risk': 0,
-            'behavioral_risk': 0,
-            'metadata_risk': 0,
-            'string_risk': 0
-        }
-        
-        # Entropy risk
         if 'entropy' in results:
-            entropy = results['entropy'].get('overall_entropy', 0)
-            if entropy > 7.5:
-                breakdown['entropy_risk'] = 30
-            elif entropy > 7.0:
-                breakdown['entropy_risk'] = 15
+            engines.append("Entropy Analyzer")
         
-        # Pattern risk
         if 'patterns' in results:
-            patterns = results['patterns']
-            if patterns.get('suspicious_apis'):
-                breakdown['pattern_risk'] += 20
-            if patterns.get('crypto_indicators'):
-                breakdown['pattern_risk'] += 15
-            if patterns.get('network_indicators'):
-                breakdown['pattern_risk'] += 10
+            engines.append("Pattern Detection Engine")
         
-        # Behavioral risk
-        if 'behavioral' in results:
-            behavioral_score = results['behavioral'].get('score', 0)
-            breakdown['behavioral_risk'] = min(behavioral_score, 30)
+        return engines
+    
+    def _extract_key_findings(self, results: Dict[str, Any]) -> List[str]:
+        """Extract key findings from analysis results"""
+        findings = []
         
-        # Metadata risk
-        if 'metadata' in results:
-            metadata = results['metadata']
-            if metadata.get('filename_analysis', {}).get('suspicious_extension'):
-                breakdown['metadata_risk'] += 10
-            if metadata.get('filename_analysis', {}).get('double_extension'):
-                breakdown['metadata_risk'] += 15
+        threat_assessment = results.get('threat_assessment', {})
+        if threat_assessment.get('reasons'):
+            findings.extend(threat_assessment['reasons'])
         
-        # String risk
-        if 'strings' in results:
-            strings = results['strings']
-            if strings.get('interesting_strings', {}).get('suspicious_keywords'):
-                breakdown['string_risk'] += 15
+        # Add VirusTotal findings
+        vt_results = results.get('virustotal', {})
+        if 'stats' in vt_results:
+            malicious = vt_results['stats'].get('malicious', 0)
+            if malicious > 0:
+                findings.append(f"VirusTotal detected malware with {malicious} engines")
+        
+        return findings[:10]  # Limit to top 10 findings
+    
+    def _summarize_strings(self, strings_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Summarize string analysis results"""
+        if not strings_data:
+            return {}
+        
+        return {
+            'total_ascii_strings': strings_data.get('total_ascii', 0),
+            'total_unicode_strings': strings_data.get('total_unicode', 0),
+            'sample_strings': strings_data.get('combined', [])[:20]  # First 20 strings
+        }
+    
+    def _summarize_virustotal(self, vt_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Summarize VirusTotal results"""
+        if 'error' in vt_data:
+            return {'status': 'error', 'message': vt_data['error']}
+        
+        stats = vt_data.get('stats', {})
+        return {
+            'detection_ratio': f"{stats.get('malicious', 0) + stats.get('suspicious', 0)}/{stats.get('total', 0)}",
+            'malicious_detections': stats.get('malicious', 0),
+            'suspicious_detections': stats.get('suspicious', 0),
+            'scan_date': vt_data.get('scan_date'),
+            'top_detections': list(vt_data.get('scan_results', {}).keys())[:10]
+        }
+    
+    def _identify_threat_vectors(self, results: Dict[str, Any]) -> List[str]:
+        """Identify potential threat vectors"""
+        vectors = []
+        patterns = results.get('patterns', {})
+        
+        if patterns.get('api_network_operations'):
+            vectors.append("Network Communication")
+        
+        if patterns.get('api_file_operations'):
+            vectors.append("File System Modification")
+        
+        if patterns.get('api_registry_operations'):
+            vectors.append("Registry Manipulation")
+        
+        if patterns.get('api_process_operations'):
+            vectors.append("Process Manipulation")
+        
+        if patterns.get('bitcoin_addresses'):
+            vectors.append("Cryptocurrency Operations")
+        
+        return vectors
+    
+    def _extract_behavioral_indicators(self, results: Dict[str, Any]) -> List[str]:
+        """Extract behavioral indicators"""
+        indicators = []
+        
+        suspicious_indicators = results.get('suspicious_indicators', [])
+        for indicator in suspicious_indicators:
+            indicators.append(f"{indicator.get('type', 'Unknown')}: {indicator.get('description', 'No description')}")
+        
+        return indicators
+    
+    def _extract_attribution_hints(self, results: Dict[str, Any]) -> List[str]:
+        """Extract potential attribution hints"""
+        hints = []
+        
+        # This could be expanded with more sophisticated attribution analysis
+        patterns = results.get('patterns', {})
+        
+        if patterns.get('emails'):
+            hints.append("Email addresses found - potential C&C communication")
+        
+        if patterns.get('urls'):
+            hints.append("URLs found - potential data exfiltration endpoints")
+        
+        return hints
+    
+    def _calculate_severity_breakdown(self, results: Dict[str, Any]) -> Dict[str, int]:
+        """Calculate breakdown of severity levels"""
+        breakdown = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
+        
+        indicators = results.get('suspicious_indicators', [])
+        for indicator in indicators:
+            severity = indicator.get('severity', 'low')
+            if severity in breakdown:
+                breakdown[severity] += 1
         
         return breakdown
     
-    def _format_technical_analysis(self, results):
-        """Format technical analysis details"""
-        technical = {}
+    def _format_strings_for_report(self, strings_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Format strings data for inclusion in report"""
+        if not strings_data:
+            return {}
         
-        # Entropy analysis
-        if 'entropy' in results:
-            technical['entropy_analysis'] = {
-                'overall_entropy': results['entropy'].get('overall_entropy', 0),
-                'entropy_assessment': results['entropy'].get('assessment', {}),
-                'high_entropy_sections': len(results['entropy'].get('high_entropy_sections', [])),
-                'entropy_variance': results['entropy'].get('entropy_variance', 0)
-            }
-        
-        # String analysis
-        if 'strings' in results:
-            string_data = results['strings']
-            technical['string_analysis'] = {
-                'total_strings': string_data.get('total_strings', 0),
-                'interesting_strings_count': sum(
-                    len(strings) for strings in string_data.get('interesting_strings', {}).values()
-                ),
-                'string_categories': list(string_data.get('interesting_strings', {}).keys())
-            }
-        
-        # Pattern analysis
-        if 'patterns' in results:
-            pattern_data = results['patterns']
-            technical['pattern_analysis'] = {
-                'total_patterns': pattern_data.get('pattern_statistics', {}).get('total_patterns', 0),
-                'categories_detected': pattern_data.get('pattern_statistics', {}).get('categories_detected', 0),
-                'most_common_category': pattern_data.get('pattern_statistics', {}).get('most_common_category', None)
-            }
-        
-        # Behavioral analysis
-        if 'behavioral' in results:
-            behavioral_data = results['behavioral']
-            technical['behavioral_analysis'] = {
-                'behavioral_score': behavioral_data.get('score', 0),
-                'risk_level': behavioral_data.get('risk_level', 'LOW'),
-                'indicator_categories': list(behavioral_data.get('indicators', {}).keys())
-            }
-        
-        return technical
-    
-    def _extract_iocs(self, results):
-        """Extract Indicators of Compromise"""
-        iocs = {
-            'file_hashes': {},
-            'network_indicators': [],
-            'file_indicators': [],
-            'registry_indicators': [],
-            'behavioral_indicators': []
-        }
-        
-        # File hashes
-        if 'hashes' in results:
-            iocs['file_hashes'] = results['hashes']
-        
-        # Network indicators
-        if 'strings' in results:
-            interesting_strings = results['strings'].get('interesting_strings', {})
-            iocs['network_indicators'].extend(interesting_strings.get('urls', []))
-            iocs['network_indicators'].extend(interesting_strings.get('ip_addresses', []))
-            iocs['network_indicators'].extend(interesting_strings.get('emails', []))
-        
-        # File indicators
-        if 'strings' in results:
-            interesting_strings = results['strings'].get('interesting_strings', {})
-            iocs['file_indicators'].extend(interesting_strings.get('file_paths', []))
-        
-        # Registry indicators
-        if 'strings' in results:
-            interesting_strings = results['strings'].get('interesting_strings', {})
-            iocs['registry_indicators'].extend(interesting_strings.get('registry_keys', []))
-        
-        # Behavioral indicators
-        if 'behavioral' in results:
-            behavioral_indicators = results['behavioral'].get('indicators', {})
-            for category, indicators in behavioral_indicators.items():
-                iocs['behavioral_indicators'].extend(indicators)
-        
-        return iocs
-    
-    def _generate_recommendations(self, results):
-        """Generate security recommendations"""
-        threat_level = results.get('threat_assessment', {}).get('level', 'LOW')
-        
-        recommendations = {
-            'immediate_actions': [],
-            'investigation_steps': [],
-            'prevention_measures': [],
-            'monitoring_recommendations': []
-        }
-        
-        # Immediate actions based on threat level
-        if threat_level == 'CRITICAL':
-            recommendations['immediate_actions'] = [
-                "Immediately quarantine the file",
-                "Do not execute under any circumstances",
-                "Perform full system scan if file was executed",
-                "Submit to security vendors for analysis",
-                "Check for lateral movement if on network"
-            ]
-        elif threat_level == 'HIGH':
-            recommendations['immediate_actions'] = [
-                "Quarantine the file for analysis",
-                "Verify file source and distribution method",
-                "Analyze in isolated environment only",
-                "Check for similar files on system"
-            ]
-        elif threat_level == 'MEDIUM':
-            recommendations['immediate_actions'] = [
-                "Verify file authenticity and source",
-                "Consider additional scanning with multiple engines",
-                "Monitor system behavior if file was executed"
-            ]
-        
-        # Investigation steps
-        recommendations['investigation_steps'] = [
-            "Analyze file in sandbox environment",
-            "Check file reputation in threat intelligence feeds",
-            "Examine file metadata and creation timestamps",
-            "Investigate file distribution method",
-            "Check for similar files or variants"
-        ]
-        
-        # Prevention measures
-        recommendations['prevention_measures'] = [
-            "Implement application whitelisting",
-            "Deploy endpoint detection and response (EDR)",
-            "Regular security awareness training",
-            "Keep security solutions updated",
-            "Implement email security filtering"
-        ]
-        
-        # Monitoring recommendations
-        recommendations['monitoring_recommendations'] = [
-            "Monitor for file hash IOCs",
-            "Watch for behavioral patterns identified",
-            "Monitor network connections to identified IPs/domains",
-            "Set up alerts for similar file types",
-            "Regular threat hunting activities"
-        ]
-        
-        return recommendations
-    
-    def _extract_analysis_metadata(self, results):
-        """Extract analysis metadata"""
-        metadata = {
-            'analysis_modules_used': results.get('modules_run', []),
-            'analysis_errors': results.get('errors', []),
-            'analysis_duration': results.get('analysis_duration', 0),
-            'analysis_timestamp': results.get('analysis_time', ''),
-            'total_indicators': self._count_total_indicators(results)
-        }
-        
-        return metadata
-    
-    def _count_total_indicators(self, results):
-        """Count total indicators found"""
-        count = 0
-        
-        # Count patterns
-        if 'patterns' in results:
-            patterns = results['patterns']
-            count += sum(len(matches) for matches in patterns.values() if isinstance(matches, list))
-        
-        # Count behavioral indicators
-        if 'behavioral' in results:
-            behavioral = results['behavioral'].get('indicators', {})
-            count += sum(len(indicators) for indicators in behavioral.values() if isinstance(indicators, list))
-        
-        # Count interesting strings
-        if 'strings' in results:
-            interesting_strings = results['strings'].get('interesting_strings', {})
-            count += sum(len(strings) for strings in interesting_strings.values() if isinstance(strings, list))
-        
-        return count
-    
-    def export_json(self, analysis_results, include_raw_data=False):
-        """
-        Export analysis results as JSON
-        
-        Args:
-            analysis_results (dict): Analysis results
-            include_raw_data (bool): Whether to include raw analysis data
-            
-        Returns:
-            str: JSON formatted report
-        """
-        try:
-            if include_raw_data:
-                export_data = analysis_results
-            else:
-                export_data = self.generate_comprehensive_report(analysis_results)
-            
-            return json.dumps(export_data, indent=2, default=str)
-        
-        except Exception as e:
-            return json.dumps({
-                'error': f"Failed to export JSON: {str(e)}",
-                'timestamp': datetime.now().isoformat()
-            }, indent=2)
-    
-    def export_csv(self, analysis_results):
-        """
-        Export key analysis results as CSV
-        
-        Args:
-            analysis_results (dict): Analysis results
-            
-        Returns:
-            str: CSV formatted data
-        """
-        try:
-            output = io.StringIO()
-            writer = csv.writer(output)
-            
-            # Write header
-            writer.writerow(['Category', 'Indicator', 'Value', 'Risk Level'])
-            
-            # File information
-            writer.writerow(['File Info', 'Filename', analysis_results.get('filename', ''), 'Info'])
-            writer.writerow(['File Info', 'Size', analysis_results.get('file_size', 0), 'Info'])
-            
-            # Threat assessment
-            threat_assessment = analysis_results.get('threat_assessment', {})
-            writer.writerow(['Threat', 'Level', threat_assessment.get('level', ''), 'Assessment'])
-            writer.writerow(['Threat', 'Score', threat_assessment.get('score', 0), 'Assessment'])
-            
-            # Hashes
-            if 'hashes' in analysis_results:
-                for hash_type, hash_value in analysis_results['hashes'].items():
-                    writer.writerow(['Hash', hash_type.upper(), hash_value, 'IOC'])
-            
-            # Patterns
-            if 'patterns' in analysis_results:
-                patterns = analysis_results['patterns']
-                for category, matches in patterns.items():
-                    if isinstance(matches, list):
-                        for match in matches:
-                            writer.writerow(['Pattern', category, match, 'IOC'])
-            
-            # Behavioral indicators
-            if 'behavioral' in analysis_results:
-                behavioral = analysis_results['behavioral'].get('indicators', {})
-                for category, indicators in behavioral.items():
-                    if isinstance(indicators, list):
-                        for indicator in indicators:
-                            writer.writerow(['Behavioral', category, indicator, 'IOC'])
-            
-            return output.getvalue()
-        
-        except Exception as e:
-            return f"Error exporting CSV: {str(e)}"
-    
-    def generate_visualization_data(self, analysis_results):
-        """
-        Generate data for visualizations
-        
-        Args:
-            analysis_results (dict): Analysis results
-            
-        Returns:
-            dict: Visualization data
-        """
-        viz_data = {}
-        
-        # Threat level pie chart
-        threat_assessment = analysis_results.get('threat_assessment', {})
-        threat_level = threat_assessment.get('level', 'LOW')
-        
-        viz_data['threat_level_chart'] = {
-            'labels': ['Threat Level'],
-            'values': [threat_assessment.get('score', 0)],
-            'colors': self._get_threat_colors(threat_level)
-        }
-        
-        # Risk breakdown chart
-        if 'threat_assessment' in analysis_results:
-            breakdown = self._calculate_risk_breakdown(analysis_results)
-            viz_data['risk_breakdown'] = {
-                'categories': list(breakdown.keys()),
-                'values': list(breakdown.values())
-            }
-        
-        # Entropy timeline
-        if 'entropy' in analysis_results:
-            entropy_data = analysis_results['entropy']
-            if 'section_entropies' in entropy_data:
-                sections = entropy_data['section_entropies']
-                viz_data['entropy_timeline'] = {
-                    'offsets': [s['offset'] for s in sections],
-                    'entropies': [s['entropy'] for s in sections]
-                }
-        
-        # Pattern distribution
-        if 'patterns' in analysis_results:
-            patterns = analysis_results['patterns']
-            pattern_counts = {}
-            for category, matches in patterns.items():
-                if isinstance(matches, list):
-                    pattern_counts[category] = len(matches)
-            
-            viz_data['pattern_distribution'] = {
-                'categories': list(pattern_counts.keys()),
-                'counts': list(pattern_counts.values())
-            }
-        
-        return viz_data
-    
-    def _get_threat_colors(self, threat_level):
-        """Get colors for threat level visualization"""
-        colors = {
-            'LOW': '#28a745',
-            'MEDIUM': '#ffc107',
-            'HIGH': '#fd7e14',
-            'CRITICAL': '#dc3545'
-        }
-        return colors.get(threat_level, '#6c757d')
-    
-    def create_summary_report(self, analysis_results):
-        """
-        Create a concise summary report
-        
-        Args:
-            analysis_results (dict): Analysis results
-            
-        Returns:
-            dict: Summary report
-        """
-        threat_assessment = analysis_results.get('threat_assessment', {})
-        
-        summary = {
-            'file_name': analysis_results.get('filename', 'Unknown'),
-            'threat_level': threat_assessment.get('level', 'Unknown'),
-            'risk_score': threat_assessment.get('score', 0),
-            'analysis_time': analysis_results.get('analysis_time', ''),
-            'key_indicators': threat_assessment.get('reasons', [])[:3],  # Top 3 indicators
-            'recommendation': threat_assessment.get('recommendation', ''),
-            'iocs_found': self._count_total_indicators(analysis_results)
-        }
-        
-        return summary
-    
-    def format_for_display(self, analysis_results):
-        """
-        Format results for display in Streamlit
-        
-        Args:
-            analysis_results (dict): Analysis results
-            
-        Returns:
-            dict: Formatted results for display
-        """
+        # Limit strings for report size
         formatted = {
-            'summary': self.create_summary_report(analysis_results),
-            'threat_assessment': self._format_threat_assessment(analysis_results),
-            'technical_details': self._format_technical_analysis(analysis_results),
-            'iocs': self._extract_iocs(analysis_results),
-            'recommendations': self._generate_recommendations(analysis_results),
-            'visualizations': self.generate_visualization_data(analysis_results)
+            'ascii_strings': strings_data.get('ascii_strings', [])[:100],
+            'unicode_strings': strings_data.get('unicode_strings', [])[:50],
+            'total_count': strings_data.get('total_ascii', 0) + strings_data.get('total_unicode', 0)
         }
         
         return formatted
+
+# Import math for file size formatting
+import math

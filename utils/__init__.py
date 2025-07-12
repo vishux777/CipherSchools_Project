@@ -1,29 +1,40 @@
 """
-MalwareShield Pro - Utility Modules
-Advanced malware detection and analysis utilities
+MalwareShield Pro Utility Modules
+
+This package contains utility modules for malware analysis including:
+- VirusTotal API integration
+- Analysis engine for file processing
+- Report generation and export
+- Threat scoring and assessment
 """
 
 __version__ = "1.0.0"
-__author__ = "vishux777"
-__all__ = ["VirusTotalAPI", "AnalysisEngine", "ReportGenerator", "ThreatScorer"]
+__author__ = "MalwareShield Pro Team"
 
-# Import all utility classes for easy access
+# Import main classes for easy access
 try:
     from .virustotal import VirusTotalAPI
 except ImportError:
-    pass
+    VirusTotalAPI = None
 
 try:
     from .analysis_engine import AnalysisEngine
 except ImportError:
-    pass
+    AnalysisEngine = None
 
 try:
     from .report_generator import ReportGenerator
 except ImportError:
-    pass
+    ReportGenerator = None
 
 try:
     from .threat_scorer import ThreatScorer
 except ImportError:
-    pass
+    ThreatScorer = None
+
+__all__ = [
+    'VirusTotalAPI',
+    'AnalysisEngine', 
+    'ReportGenerator',
+    'ThreatScorer'
+]
