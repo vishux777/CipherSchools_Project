@@ -449,7 +449,7 @@ class ThreatScorer:
     def _calculate_confidence(self, score_breakdown: Dict[str, float], confidence_factors: List[str]) -> str:
         """Calculate overall confidence in the assessment"""
         # Count non-zero scoring components
-        active_components = sum([server]
+        active_components = sum([server])
 headless = true
 address = "0.0.0.0"
 port = 5000
