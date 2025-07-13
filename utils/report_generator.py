@@ -1,698 +1,676 @@
 """
 Report Generator Module
 
-Generates comprehensive analysis reports in multiple formats including
-JSON, HTML, and text summaries for malware analysis results.
+Provides comprehensive PDF and JSON report generation capabilities for malware
+analysis results with professional formatting and detailed visualizations.
 """
 
 import json
-import os
 from datetime import datetime
 from typing import Dict, Any, List
+import io
 import base64
 
+try:
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.colors import HexColor, black, white, red, green, orange
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+    from reportlab.platypus import Image as ReportLabImage
+    from reportlab.lib.units import inch
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
 class ReportGenerator:
-    """
-    Comprehensive report generator for malware analysis results
-    """
+    """Professional report generator for malware analysis results"""
     
     def __init__(self):
         """Initialize the report generator"""
-        self.report_template = self._load_report_template()
-        
-    def _load_report_template(self):
-        """Load HTML report template"""
-        return """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>MalwareShield Pro - Analysis Report</title>
-            <style>
-                body {
-                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    margin: 0;
-                    padding: 20px;
-                    background-color: #0e1117;
-                    color: #fafafa;
-                    line-height: 1.6;
-                }
-                .container {
-                    max-width: 1200px;
-                    margin: 0 auto;
-                    background-color: #262730;
-                    padding: 30px;
-                    border-radius: 10px;
-                    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-                }
-                .header {
-                    text-align: center;
-                    border-bottom: 2px solid #444;
-                    padding-bottom: 20px;
-                    margin-bottom: 30px;
-                }
-                .threat-critical { background: linear-gradient(90deg, #8B0000, #DC143C); }
-                .threat-high { background: linear-gradient(90deg, #FF4500, #FF6347); }
-                .threat-medium { background: linear-gradient(90deg, #FF8C00, #FFA500); }
-                .threat-low { background: linear-gradient(90deg, #228B22, #32CD32); }
-                .threat-clean { background: linear-gradient(90deg, #228B22, #32CD32); }
-                
-                .threat-banner {
-                    padding: 15px;
-                    border-radius: 10px;
-                    color: white;
-                    font-weight: bold;
-                    text-align: center;
-                    margin: 20px 0;
-                    font-size: 1.2em;
-                }
-                .section {
-                    margin: 30px 0;
-                    background-color: #1a1d29;
-                    padding: 20px;
-                    border-radius: 8px;
-                    border-left: 4px solid #00aaff;
-                }
-                .section h2 {
-                    color: #00aaff;
-                    margin-top: 0;
-                }
-                .grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                    gap: 20px;
-                    margin: 20px 0;
-                }
-                .metric {
-                    background-color: #262730;
-                    padding: 15px;
-                    border-radius: 8px;
-                    border: 1px solid #444;
-                }
-                .metric h3 {
-                    margin: 0 0 10px 0;
-                    color: #00aaff;
-                }
-                .code-block {
-                    background-color: #1a1d29;
-                    padding: 15px;
-                    border-radius: 5px;
-                    border: 1px solid #444;
-                    font-family: 'Courier New', monospace;
-                    white-space: pre-wrap;
-                    overflow-x: auto;
-                    margin: 10px 0;
-                }
-                .warning {
-                    background-color: #2d1b1b;
-                    border-left: 4px solid #ff4444;
-                    padding: 15px;
-                    margin: 10px 0;
-                    border-radius: 5px;
-                }
-                .info {
-                    background-color: #1b2d3a;
-                    border-left: 4px solid #4444ff;
-                    padding: 15px;
-                    margin: 10px 0;
-                    border-radius: 5px;
-                }
-                .success {
-                    background-color: #1b2d1b;
-                    border-left: 4px solid #44ff44;
-                    padding: 15px;
-                    margin: 10px 0;
-                    border-radius: 5px;
-                }
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    margin: 20px 0;
-                }
-                th, td {
-                    padding: 12px;
-                    text-align: left;
-                    border-bottom: 1px solid #444;
-                }
-                th {
-                    background-color: #1a1d29;
-                    color: #00aaff;
-                }
-                .footer {
-                    text-align: center;
-                    margin-top: 40px;
-                    padding-top: 20px;
-                    border-top: 1px solid #444;
-                    color: #888;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                {content}
-            </div>
-        </body>
-        </html>
-        """
+        self.styles = self._create_styles() if REPORTLAB_AVAILABLE else None
     
-    def generate_report(self, analysis_results: Dict[str, Any], format_type: str = "comprehensive") -> Dict[str, Any]:
-        """
-        Generate a comprehensive analysis report
+    def generate_report(self, results: Dict[str, Any]) -> bytes:
+        """Generate a comprehensive PDF report
         
         Args:
-            analysis_results (dict): Complete analysis results
-            format_type (str): Type of report to generate
+            results: Analysis results dictionary
             
         Returns:
-            dict: Generated report data
+            bytes: PDF report data
+        """
+        if not REPORTLAB_AVAILABLE:
+            return self._generate_text_report(results).encode('utf-8')
+        
+        try:
+            # Create PDF buffer
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=A4,
+                rightMargin=72,
+                leftMargin=72,
+                topMargin=72,
+                bottomMargin=18
+            )
+            
+            # Build report content
+            story = []
+            
+            # Title page
+            story.extend(self._create_title_page(results))
+            story.append(PageBreak())
+            
+            # Executive summary
+            story.extend(self._create_executive_summary(results))
+            story.append(PageBreak())
+            
+            # File information
+            story.extend(self._create_file_information(results))
+            
+            # Analysis details
+            story.extend(self._create_analysis_details(results))
+            
+            # VirusTotal results if available
+            if 'virustotal' in results:
+                story.append(PageBreak())
+                story.extend(self._create_virustotal_section(results))
+            
+            # Patterns and IOCs
+            if 'patterns' in results:
+                story.append(PageBreak())
+                story.extend(self._create_patterns_section(results))
+            
+            # Recommendations
+            story.append(PageBreak())
+            story.extend(self._create_recommendations(results))
+            
+            # Build PDF
+            doc.build(story)
+            pdf_data = buffer.getvalue()
+            buffer.close()
+            
+            return pdf_data
+            
+        except Exception as e:
+            # Fallback to text report
+            return self._generate_text_report(results, error=str(e)).encode('utf-8')
+    
+    def export_json(self, results: Dict[str, Any]) -> str:
+        """Export results as formatted JSON
+        
+        Args:
+            results: Analysis results dictionary
+            
+        Returns:
+            str: Formatted JSON string
         """
         try:
-            report_data = {
-                'metadata': self._generate_metadata(analysis_results),
-                'executive_summary': self._generate_executive_summary(analysis_results),
-                'technical_details': self._generate_technical_details(analysis_results),
-                'threat_assessment': self._generate_threat_assessment(analysis_results),
-                'recommendations': self._generate_recommendations(analysis_results),
-                'appendix': self._generate_appendix(analysis_results)
-            }
-            
-            if format_type == "comprehensive":
-                return report_data
-            elif format_type == "summary":
-                return {
-                    'metadata': report_data['metadata'],
-                    'executive_summary': report_data['executive_summary'],
-                    'threat_assessment': report_data['threat_assessment']
-                }
-            else:
-                return report_data
-                
+            # Create a clean copy for export
+            export_data = self._prepare_json_export(results)
+            return json.dumps(export_data, indent=2, default=self._json_serializer)
         except Exception as e:
-            return {
-                'error': f"Failed to generate report: {str(e)}",
-                'status': 'error'
-            }
+            return json.dumps({
+                'error': f'JSON export failed: {str(e)}',
+                'timestamp': datetime.now().isoformat()
+            }, indent=2)
     
-    def _generate_metadata(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate report metadata"""
-        return {
-            'report_id': f"MSP_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            'generated_at': datetime.now().isoformat(),
-            'analyzer_version': "MalwareShield Pro v1.0",
-            'file_info': {
-                'filename': results.get('filename', 'Unknown'),
-                'file_size': results.get('file_size', 0),
-                'file_size_human': self._format_file_size(results.get('file_size', 0)),
-                'analysis_time': results.get('analysis_time', datetime.now().isoformat())
-            },
-            'analysis_engines': self._get_analysis_engines(results)
-        }
+    def _create_styles(self):
+        """Create custom styles for the PDF report"""
+        if not REPORTLAB_AVAILABLE:
+            return None
+        
+        styles = getSampleStyleSheet()
+        
+        # Custom styles
+        styles.add(ParagraphStyle(
+            name='CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            spaceAfter=30,
+            alignment=TA_CENTER,
+            textColor=HexColor('#2c3e50')
+        ))
+        
+        styles.add(ParagraphStyle(
+            name='SectionHeader',
+            parent=styles['Heading2'],
+            fontSize=16,
+            spaceAfter=12,
+            spaceBefore=12,
+            textColor=HexColor('#34495e'),
+            borderWidth=1,
+            borderColor=HexColor('#bdc3c7'),
+            borderPadding=5
+        ))
+        
+        styles.add(ParagraphStyle(
+            name='ThreatHigh',
+            parent=styles['Normal'],
+            fontSize=14,
+            textColor=HexColor('#e74c3c'),
+            fontName='Helvetica-Bold',
+            alignment=TA_CENTER,
+            borderWidth=2,
+            borderColor=HexColor('#e74c3c'),
+            borderPadding=10
+        ))
+        
+        styles.add(ParagraphStyle(
+            name='ThreatMedium',
+            parent=styles['Normal'],
+            fontSize=14,
+            textColor=HexColor('#f39c12'),
+            fontName='Helvetica-Bold',
+            alignment=TA_CENTER,
+            borderWidth=2,
+            borderColor=HexColor('#f39c12'),
+            borderPadding=10
+        ))
+        
+        styles.add(ParagraphStyle(
+            name='ThreatLow',
+            parent=styles['Normal'],
+            fontSize=14,
+            textColor=HexColor('#27ae60'),
+            fontName='Helvetica-Bold',
+            alignment=TA_CENTER,
+            borderWidth=2,
+            borderColor=HexColor('#27ae60'),
+            borderPadding=10
+        ))
+        
+        return styles
     
-    def _generate_executive_summary(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate executive summary"""
-        threat_assessment = results.get('threat_assessment', {})
-        threat_level = threat_assessment.get('level', 'UNKNOWN')
-        threat_score = threat_assessment.get('score', 0)
+    def _create_title_page(self, results: Dict[str, Any]) -> List:
+        """Create the title page for the report"""
+        story = []
         
-        # Determine risk summary
-        if threat_level in ['CRITICAL', 'HIGH']:
-            risk_summary = "This file poses a significant security risk and should be quarantined immediately."
-            action_required = "IMMEDIATE ACTION REQUIRED"
-        elif threat_level == 'MEDIUM':
-            risk_summary = "This file exhibits suspicious characteristics and should be investigated further."
-            action_required = "INVESTIGATION RECOMMENDED"
-        else:
-            risk_summary = "This file appears to be clean with minimal security concerns."
-            action_required = "NO IMMEDIATE ACTION REQUIRED"
+        # Title
+        title = Paragraph("🛡️ MalwareShield Pro", self.styles['CustomTitle'])
+        story.append(title)
+        story.append(Spacer(1, 12))
         
-        # Count detections
-        virustotal_results = results.get('virustotal', {})
-        vt_detections = 0
-        if 'stats' in virustotal_results:
-            vt_detections = virustotal_results['stats'].get('malicious', 0)
+        subtitle = Paragraph("Comprehensive Malware Analysis Report", self.styles['Heading2'])
+        story.append(subtitle)
+        story.append(Spacer(1, 30))
         
-        return {
-            'threat_level': threat_level,
-            'threat_score': threat_score,
-            'risk_summary': risk_summary,
-            'action_required': action_required,
-            'key_findings': self._extract_key_findings(results),
-            'detection_summary': {
-                'virustotal_detections': vt_detections,
-                'suspicious_patterns': len(results.get('patterns', {})),
-                'threat_indicators': len(results.get('suspicious_indicators', []))
-            }
-        }
+        # File information
+        file_info = results.get('file_info', {})
+        filename = file_info.get('filename', 'Unknown')
+        
+        info_data = [
+            ['Report Generated:', datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')],
+            ['Analyzed File:', filename],
+            ['Scan Type:', results.get('scan_type', 'Unknown').title()],
+            ['File Size:', self._format_file_size(file_info.get('size', 0))],
+        ]
+        
+        info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+        info_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), HexColor('#f8f9fa')),
+            ('TEXTCOLOR', (0, 0), (-1, -1), black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 12),
+            ('GRID', (0, 0), (-1, -1), 1, HexColor('#dee2e6'))
+        ]))
+        
+        story.append(info_table)
+        story.append(Spacer(1, 50))
+        
+        # Threat level summary
+        threat_info = results.get('threat_assessment', {})
+        threat_level = threat_info.get('level', 'UNKNOWN')
+        threat_score = threat_info.get('score', 0)
+        
+        threat_style = self._get_threat_style(threat_level)
+        threat_text = f"THREAT LEVEL: {threat_level} (Score: {threat_score}/100)"
+        threat_para = Paragraph(threat_text, self.styles[threat_style])
+        
+        story.append(threat_para)
+        
+        return story
     
-    def _generate_technical_details(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate technical analysis details"""
-        return {
-            'file_hashes': results.get('hashes', {}),
-            'entropy_analysis': results.get('entropy', {}),
-            'file_signature': results.get('file_signature', {}),
-            'string_analysis': self._summarize_strings(results.get('strings', {})),
-            'pattern_detection': results.get('patterns', {}),
-            'suspicious_indicators': results.get('suspicious_indicators', []),
-            'virustotal_analysis': self._summarize_virustotal(results.get('virustotal', {}))
-        }
-    
-    def _generate_threat_assessment(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate detailed threat assessment"""
-        threat_data = results.get('threat_assessment', {})
+    def _create_executive_summary(self, results: Dict[str, Any]) -> List:
+        """Create executive summary section"""
+        story = []
         
-        return {
-            'overall_assessment': threat_data,
-            'threat_vectors': self._identify_threat_vectors(results),
-            'behavioral_indicators': self._extract_behavioral_indicators(results),
-            'attribution_hints': self._extract_attribution_hints(results),
-            'severity_breakdown': self._calculate_severity_breakdown(results)
-        }
-    
-    def _generate_recommendations(self, results: Dict[str, Any]) -> List[Dict[str, str]]:
-        """Generate security recommendations"""
-        recommendations = []
-        threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
+        story.append(Paragraph("Executive Summary", self.styles['SectionHeader']))
+        story.append(Spacer(1, 12))
         
-        if threat_level in ['CRITICAL', 'HIGH']:
-            recommendations.extend([
-                {
-                    'priority': 'HIGH',
-                    'action': 'Immediate Quarantine',
-                    'description': 'Isolate this file immediately and prevent execution'
-                },
-                {
-                    'priority': 'HIGH',
-                    'action': 'Network Monitoring',
-                    'description': 'Monitor network traffic for signs of compromise'
-                },
-                {
-                    'priority': 'MEDIUM',
-                    'action': 'System Scan',
-                    'description': 'Perform full system scan to check for related threats'
-                }
-            ])
+        # Analysis overview
+        file_info = results.get('file_info', {})
+        threat_info = results.get('threat_assessment', {})
         
-        if threat_level == 'MEDIUM':
-            recommendations.extend([
-                {
-                    'priority': 'MEDIUM',
-                    'action': 'Further Analysis',
-                    'description': 'Submit to additional analysis engines for verification'
-                },
-                {
-                    'priority': 'LOW',
-                    'action': 'Sandboxing',
-                    'description': 'Execute in isolated environment for behavioral analysis'
-                }
-            ])
+        summary_text = f"""
+        This report presents the comprehensive analysis results for the file 
+        "{file_info.get('filename', 'Unknown')}". The analysis was performed using 
+        MalwareShield Pro's advanced detection capabilities.
+        """
         
-        # Add pattern-specific recommendations
+        story.append(Paragraph(summary_text, self.styles['Normal']))
+        story.append(Spacer(1, 12))
+        
+        # Key findings
+        story.append(Paragraph("Key Findings:", self.styles['Heading3']))
+        
+        findings = []
+        
+        # Threat level
+        threat_level = threat_info.get('level', 'UNKNOWN')
+        threat_score = threat_info.get('score', 0)
+        findings.append(f"• Threat Level: {threat_level} ({threat_score}/100)")
+        
+        # File type
+        analysis = results.get('analysis', {})
+        file_type = analysis.get('file_type', 'Unknown')
+        findings.append(f"• File Type: {file_type}")
+        
+        # Entropy
+        entropy = analysis.get('entropy', 0)
+        findings.append(f"• File Entropy: {entropy:.2f}")
+        
+        # Patterns
         patterns = results.get('patterns', {})
-        if patterns.get('bitcoin_addresses'):
-            recommendations.append({
-                'priority': 'HIGH',
-                'action': 'Cryptocurrency Monitoring',
-                'description': 'Monitor for unauthorized cryptocurrency transactions'
-            })
+        total_patterns = sum(len(matches) for matches in patterns.values())
+        findings.append(f"• Suspicious Patterns: {total_patterns} detected")
         
-        if patterns.get('api_injection_operations'):
-            recommendations.append({
-                'priority': 'HIGH',
-                'action': 'Process Monitoring',
-                'description': 'Monitor for process injection and code modification attempts'
-            })
+        # VirusTotal
+        vt_results = results.get('virustotal', {})
+        if 'stats' in vt_results:
+            stats = vt_results['stats']
+            malicious = stats.get('malicious', 0)
+            total = stats.get('total', 0)
+            findings.append(f"• VirusTotal Detection: {malicious}/{total} engines")
         
-        return recommendations
-    
-    def _generate_appendix(self, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate appendix with detailed technical data"""
-        return {
-            'raw_strings': self._format_strings_for_report(results.get('strings', {})),
-            'pattern_matches': results.get('patterns', {}),
-            'entropy_details': results.get('entropy', {}),
-            'virustotal_raw': results.get('virustotal', {}),
-            'analysis_metadata': {
-                'total_analysis_time': 'N/A',  # Could be calculated if tracked
-                'engines_used': self._get_analysis_engines(results),
-                'confidence_level': results.get('threat_assessment', {}).get('confidence', 'unknown')
-            }
-        }
-    
-    def export_json(self, results: Dict[str, Any], pretty: bool = True) -> str:
-        """
-        Export results as JSON
+        for finding in findings:
+            story.append(Paragraph(finding, self.styles['Normal']))
         
-        Args:
-            results (dict): Analysis results
-            pretty (bool): Whether to format JSON nicely
-            
-        Returns:
-            str: JSON formatted results
-        """
-        try:
-            if pretty:
-                return json.dumps(results, indent=2, default=str, ensure_ascii=False)
-            else:
-                return json.dumps(results, default=str, ensure_ascii=False)
-        except Exception as e:
-            return json.dumps({'error': f'JSON export failed: {str(e)}'}, indent=2)
-    
-    def export_html(self, results: Dict[str, Any]) -> str:
-        """
-        Export results as HTML report
+        story.append(Spacer(1, 12))
         
-        Args:
-            results (dict): Analysis results
-            
-        Returns:
-            str: HTML formatted report
-        """
-        try:
-            report_data = self.generate_report(results)
-            html_content = self._build_html_content(report_data, results)
-            return self.report_template.format(content=html_content)
-        except Exception as e:
-            return f"<html><body><h1>Report Generation Error</h1><p>{str(e)}</p></body></html>"
-    
-    def export_text_summary(self, results: Dict[str, Any]) -> str:
-        """
-        Export results as plain text summary
-        
-        Args:
-            results (dict): Analysis results
-            
-        Returns:
-            str: Text formatted summary
-        """
-        try:
-            report_data = self.generate_report(results, "summary")
-            
-            summary = []
-            summary.append("=" * 60)
-            summary.append("MALWARESHIELD PRO - ANALYSIS REPORT")
-            summary.append("=" * 60)
-            summary.append("")
-            
-            # Metadata
-            metadata = report_data['metadata']
-            summary.append(f"Report ID: {metadata['report_id']}")
-            summary.append(f"Generated: {metadata['generated_at']}")
-            summary.append(f"File: {metadata['file_info']['filename']}")
-            summary.append(f"Size: {metadata['file_info']['file_size_human']}")
-            summary.append("")
-            
-            # Executive Summary
-            exec_summary = report_data['executive_summary']
-            summary.append("THREAT ASSESSMENT:")
-            summary.append("-" * 20)
-            summary.append(f"Threat Level: {exec_summary['threat_level']}")
-            summary.append(f"Threat Score: {exec_summary['threat_score']}/100")
-            summary.append(f"Risk Summary: {exec_summary['risk_summary']}")
-            summary.append(f"Action Required: {exec_summary['action_required']}")
-            summary.append("")
-            
-            # Key Findings
-            if exec_summary['key_findings']:
-                summary.append("KEY FINDINGS:")
-                summary.append("-" * 15)
-                for finding in exec_summary['key_findings']:
-                    summary.append(f"• {finding}")
-                summary.append("")
-            
-            # Detection Summary
-            detection = exec_summary['detection_summary']
-            summary.append("DETECTION SUMMARY:")
-            summary.append("-" * 20)
-            summary.append(f"VirusTotal Detections: {detection['virustotal_detections']}")
-            summary.append(f"Suspicious Patterns: {detection['suspicious_patterns']}")
-            summary.append(f"Threat Indicators: {detection['threat_indicators']}")
-            summary.append("")
-            
-            summary.append("=" * 60)
-            summary.append("End of Report")
-            summary.append("=" * 60)
-            
-            return "\n".join(summary)
-            
-        except Exception as e:
-            return f"Text export failed: {str(e)}"
-    
-    def _build_html_content(self, report_data: Dict[str, Any], raw_results: Dict[str, Any]) -> str:
-        """Build HTML content for the report"""
-        content = []
-        
-        # Header
-        metadata = report_data['metadata']
-        content.append(f"""
-        <div class="header">
-            <h1>🛡️ MalwareShield Pro</h1>
-            <h2>Advanced Threat Analysis Report</h2>
-            <p><strong>Report ID:</strong> {metadata['report_id']}</p>
-            <p><strong>Generated:</strong> {metadata['generated_at']}</p>
-        </div>
-        """)
-        
-        # Threat Banner
-        exec_summary = report_data['executive_summary']
-        threat_level = exec_summary['threat_level'].lower()
-        content.append(f"""
-        <div class="threat-banner threat-{threat_level}">
-            🚨 THREAT LEVEL: {exec_summary['threat_level']} - Score: {exec_summary['threat_score']}/100
-        </div>
-        """)
-        
-        # File Information
-        file_info = metadata['file_info']
-        content.append(f"""
-        <div class="section">
-            <h2>📄 File Information</h2>
-            <div class="grid">
-                <div class="metric">
-                    <h3>File Name</h3>
-                    <p>{file_info['filename']}</p>
-                </div>
-                <div class="metric">
-                    <h3>File Size</h3>
-                    <p>{file_info['file_size_human']} ({file_info['file_size']} bytes)</p>
-                </div>
-                <div class="metric">
-                    <h3>Analysis Time</h3>
-                    <p>{file_info['analysis_time']}</p>
-                </div>
-            </div>
-        </div>
-        """)
-        
-        # Executive Summary
-        content.append(f"""
-        <div class="section">
-            <h2>📊 Executive Summary</h2>
-            <div class="{'warning' if threat_level in ['critical', 'high'] else 'info' if threat_level == 'medium' else 'success'}">
-                <strong>Risk Summary:</strong> {exec_summary['risk_summary']}<br>
-                <strong>Action Required:</strong> {exec_summary['action_required']}
-            </div>
-        </div>
-        """)
-        
-        # Key Findings
-        if exec_summary['key_findings']:
-            findings_html = "<ul>"
-            for finding in exec_summary['key_findings']:
-                findings_html += f"<li>{finding}</li>"
-            findings_html += "</ul>"
-            
-            content.append(f"""
-            <div class="section">
-                <h2>🔍 Key Findings</h2>
-                {findings_html}
-            </div>
-            """)
-        
-        # Technical Details
-        tech_details = report_data['technical_details']
-        if tech_details.get('file_hashes'):
-            hashes_html = ""
-            for hash_type, hash_value in tech_details['file_hashes'].items():
-                hashes_html += f"<div class='metric'><h3>{hash_type.upper()}</h3><p style='font-family: monospace; word-break: break-all;'>{hash_value}</p></div>"
-            
-            content.append(f"""
-            <div class="section">
-                <h2>🔐 File Hashes</h2>
-                <div class="grid">
-                    {hashes_html}
-                </div>
-            </div>
-            """)
-        
-        # Recommendations
-        recommendations = report_data['recommendations']
+        # Recommendations preview
+        recommendations = self._get_recommendations(results)
         if recommendations:
-            rec_html = "<table><tr><th>Priority</th><th>Action</th><th>Description</th></tr>"
-            for rec in recommendations:
-                priority_color = '#ff4444' if rec['priority'] == 'HIGH' else '#ffaa44' if rec['priority'] == 'MEDIUM' else '#44ff44'
-                rec_html += f"<tr><td style='color: {priority_color}; font-weight: bold;'>{rec['priority']}</td><td>{rec['action']}</td><td>{rec['description']}</td></tr>"
-            rec_html += "</table>"
-            
-            content.append(f"""
-            <div class="section">
-                <h2>⚡ Recommendations</h2>
-                {rec_html}
-            </div>
-            """)
+            story.append(Paragraph("Primary Recommendation:", self.styles['Heading3']))
+            story.append(Paragraph(recommendations[0], self.styles['Normal']))
         
-        # Footer
-        content.append(f"""
-        <div class="footer">
-            <p>Generated by MalwareShield Pro v1.0 | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-            <p><small>This report is confidential and should be handled according to your organization's security policies.</small></p>
-        </div>
-        """)
-        
-        return "".join(content)
+        return story
     
-    # Helper methods
+    def _create_file_information(self, results: Dict[str, Any]) -> List:
+        """Create file information section"""
+        story = []
+        
+        story.append(Paragraph("File Information", self.styles['SectionHeader']))
+        story.append(Spacer(1, 12))
+        
+        file_info = results.get('file_info', {})
+        hashes = file_info.get('hashes', {})
+        
+        # Basic information table
+        basic_data = [
+            ['Property', 'Value'],
+            ['Filename', file_info.get('filename', 'Unknown')],
+            ['File Size', self._format_file_size(file_info.get('size', 0))],
+            ['File Type', results.get('analysis', {}).get('file_type', 'Unknown')],
+            ['Analysis Date', datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')],
+        ]
+        
+        basic_table = Table(basic_data, colWidths=[2*inch, 4*inch])
+        basic_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), HexColor('#34495e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 1, HexColor('#bdc3c7'))
+        ]))
+        
+        story.append(basic_table)
+        story.append(Spacer(1, 20))
+        
+        # Hash values table
+        if hashes:
+            story.append(Paragraph("Hash Values", self.styles['Heading3']))
+            
+            hash_data = [['Hash Type', 'Value']]
+            for hash_type, hash_value in hashes.items():
+                hash_data.append([hash_type.upper(), hash_value])
+            
+            hash_table = Table(hash_data, colWidths=[1.5*inch, 4.5*inch])
+            hash_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), white),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 1, HexColor('#bdc3c7'))
+            ]))
+            
+            story.append(hash_table)
+        
+        return story
+    
+    def _create_analysis_details(self, results: Dict[str, Any]) -> List:
+        """Create detailed analysis section"""
+        story = []
+        
+        story.append(Paragraph("Technical Analysis", self.styles['SectionHeader']))
+        story.append(Spacer(1, 12))
+        
+        analysis = results.get('analysis', {})
+        
+        # Entropy analysis
+        entropy = analysis.get('entropy', 0)
+        story.append(Paragraph("Entropy Analysis", self.styles['Heading3']))
+        
+        entropy_text = f"File entropy: {entropy:.2f}"
+        if entropy > 7.5:
+            entropy_text += " (HIGH - Possible encryption/packing detected)"
+        elif entropy < 1.0:
+            entropy_text += " (LOW - Likely text or structured data)"
+        else:
+            entropy_text += " (NORMAL - Typical entropy range)"
+        
+        story.append(Paragraph(entropy_text, self.styles['Normal']))
+        story.append(Spacer(1, 12))
+        
+        # String analysis
+        strings = analysis.get('strings', [])
+        if strings:
+            story.append(Paragraph("String Analysis", self.styles['Heading3']))
+            story.append(Paragraph(f"Extracted {len(strings)} printable strings", self.styles['Normal']))
+            
+            # Show sample strings (first 10)
+            sample_strings = strings[:10]
+            if sample_strings:
+                story.append(Paragraph("Sample strings:", self.styles['Normal']))
+                for i, string_val in enumerate(sample_strings, 1):
+                    # Truncate long strings
+                    display_string = string_val[:100] + "..." if len(string_val) > 100 else string_val
+                    story.append(Paragraph(f"{i}. {display_string}", self.styles['Normal']))
+        
+        return story
+    
+    def _create_virustotal_section(self, results: Dict[str, Any]) -> List:
+        """Create VirusTotal results section"""
+        story = []
+        
+        story.append(Paragraph("VirusTotal Analysis", self.styles['SectionHeader']))
+        story.append(Spacer(1, 12))
+        
+        vt_results = results.get('virustotal', {})
+        
+        if 'error' in vt_results:
+            story.append(Paragraph(f"VirusTotal Error: {vt_results['error']}", self.styles['Normal']))
+            return story
+        
+        # Detection statistics
+        stats = vt_results.get('stats', {})
+        if stats:
+            stats_data = [
+                ['Detection Category', 'Count'],
+                ['Malicious', str(stats.get('malicious', 0))],
+                ['Suspicious', str(stats.get('suspicious', 0))],
+                ['Clean', str(stats.get('harmless', 0))],
+                ['Undetected', str(stats.get('undetected', 0))],
+                ['Total Engines', str(stats.get('total', 0))]
+            ]
+            
+            stats_table = Table(stats_data, colWidths=[2*inch, 1*inch])
+            stats_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), HexColor('#34495e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), white),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('GRID', (0, 0), (-1, -1), 1, HexColor('#bdc3c7'))
+            ]))
+            
+            story.append(stats_table)
+            story.append(Spacer(1, 20))
+        
+        # Detection details (show only positive detections)
+        scans = vt_results.get('scans', {})
+        if scans:
+            positive_detections = {
+                engine: result for engine, result in scans.items()
+                if result.get('result') and result.get('result') != 'Clean'
+            }
+            
+            if positive_detections:
+                story.append(Paragraph("Positive Detections", self.styles['Heading3']))
+                
+                detection_data = [['Engine', 'Detection', 'Version']]
+                for engine, result in positive_detections.items():
+                    detection_data.append([
+                        engine,
+                        result.get('result', 'Unknown'),
+                        result.get('version', 'N/A')
+                    ])
+                
+                detection_table = Table(detection_data, colWidths=[2*inch, 2.5*inch, 1.5*inch])
+                detection_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), HexColor('#e74c3c')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), white),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 9),
+                    ('GRID', (0, 0), (-1, -1), 1, HexColor('#bdc3c7'))
+                ]))
+                
+                story.append(detection_table)
+        
+        return story
+    
+    def _create_patterns_section(self, results: Dict[str, Any]) -> List:
+        """Create patterns and IOCs section"""
+        story = []
+        
+        story.append(Paragraph("Indicators of Compromise (IOCs)", self.styles['SectionHeader']))
+        story.append(Spacer(1, 12))
+        
+        patterns = results.get('patterns', {})
+        
+        if not patterns:
+            story.append(Paragraph("No suspicious patterns detected.", self.styles['Normal']))
+            return story
+        
+        for category, matches in patterns.items():
+            if matches:
+                story.append(Paragraph(f"{category.replace('_', ' ').title()} ({len(matches)} found)", self.styles['Heading3']))
+                
+                # Limit displayed matches to avoid overly long reports
+                display_matches = matches[:20]
+                for match in display_matches:
+                    story.append(Paragraph(f"• {match}", self.styles['Normal']))
+                
+                if len(matches) > 20:
+                    story.append(Paragraph(f"... and {len(matches) - 20} more", self.styles['Normal']))
+                
+                story.append(Spacer(1, 12))
+        
+        return story
+    
+    def _create_recommendations(self, results: Dict[str, Any]) -> List:
+        """Create recommendations section"""
+        story = []
+        
+        story.append(Paragraph("Recommendations", self.styles['SectionHeader']))
+        story.append(Spacer(1, 12))
+        
+        recommendations = self._get_recommendations(results)
+        
+        for i, recommendation in enumerate(recommendations, 1):
+            story.append(Paragraph(f"{i}. {recommendation}", self.styles['Normal']))
+            story.append(Spacer(1, 6))
+        
+        return story
+    
+    def _get_recommendations(self, results: Dict[str, Any]) -> List[str]:
+        """Generate recommendations based on analysis results"""
+        recommendations = []
+        
+        threat_info = results.get('threat_assessment', {})
+        threat_level = threat_info.get('level', 'UNKNOWN')
+        
+        if threat_level in ['CRITICAL', 'HIGH']:
+            recommendations.append("IMMEDIATE ACTION REQUIRED: Quarantine this file immediately and perform a full system scan.")
+            recommendations.append("Do not execute or open this file under any circumstances.")
+            recommendations.append("Report this file to your security team and consider forensic analysis.")
+        elif threat_level == 'MEDIUM':
+            recommendations.append("Exercise caution: This file shows suspicious characteristics that warrant further investigation.")
+            recommendations.append("Consider running additional analysis tools before execution.")
+            recommendations.append("Monitor system behavior if this file has been executed.")
+        elif threat_level == 'LOW':
+            recommendations.append("File appears relatively safe but monitor for any unusual behavior.")
+            recommendations.append("Consider verifying file source and digital signatures.")
+        else:
+            recommendations.append("File appears clean based on current analysis.")
+            recommendations.append("Continue following standard security practices.")
+        
+        # Add specific recommendations based on findings
+        analysis = results.get('analysis', {})
+        entropy = analysis.get('entropy', 0)
+        
+        if entropy > 7.5:
+            recommendations.append("High entropy detected - file may be packed or encrypted. Consider unpacking analysis.")
+        
+        patterns = results.get('patterns', {})
+        if patterns.get('network'):
+            recommendations.append("Network artifacts detected - monitor network traffic if file is executed.")
+        
+        if patterns.get('crypto'):
+            recommendations.append("Cryptocurrency-related patterns detected - potential ransomware or cryptominer.")
+        
+        vt_results = results.get('virustotal', {})
+        if vt_results.get('stats', {}).get('malicious', 0) > 5:
+            recommendations.append("Multiple antivirus engines detected threats - treat as confirmed malware.")
+        
+        return recommendations[:10]  # Limit to 10 recommendations
+    
+    def _get_threat_style(self, threat_level: str) -> str:
+        """Get appropriate style for threat level"""
+        threat_styles = {
+            'CRITICAL': 'ThreatHigh',
+            'HIGH': 'ThreatHigh',
+            'MEDIUM': 'ThreatMedium',
+            'LOW': 'ThreatLow',
+            'CLEAN': 'ThreatLow'
+        }
+        return threat_styles.get(threat_level, 'Normal')
+    
     def _format_file_size(self, size_bytes: int) -> str:
         """Format file size in human readable format"""
         if size_bytes == 0:
             return "0 B"
         
+        import math
         size_names = ["B", "KB", "MB", "GB", "TB"]
         i = int(math.floor(math.log(size_bytes, 1024)))
         p = math.pow(1024, i)
         s = round(size_bytes / p, 2)
-        
         return f"{s} {size_names[i]}"
     
-    def _get_analysis_engines(self, results: Dict[str, Any]) -> List[str]:
-        """Get list of analysis engines used"""
-        engines = ["Static Analysis Engine"]
+    def _prepare_json_export(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare results for JSON export"""
+        export_data = {
+            'metadata': {
+                'report_version': '1.0',
+                'generator': 'MalwareShield Pro',
+                'export_timestamp': datetime.now().isoformat(),
+                'analysis_timestamp': results.get('timestamp', datetime.now().isoformat())
+            },
+            'file_information': results.get('file_info', {}),
+            'analysis_results': results.get('analysis', {}),
+            'threat_assessment': results.get('threat_assessment', {}),
+            'patterns_detected': results.get('patterns', {}),
+            'scan_type': results.get('scan_type', 'unknown')
+        }
         
-        if 'virustotal' in results and 'error' not in results['virustotal']:
-            engines.append("VirusTotal")
+        # Add VirusTotal results if available
+        if 'virustotal' in results:
+            export_data['virustotal_results'] = results['virustotal']
         
-        if 'entropy' in results:
-            engines.append("Entropy Analyzer")
-        
-        if 'patterns' in results:
-            engines.append("Pattern Detection Engine")
-        
-        return engines
+        return export_data
     
-    def _extract_key_findings(self, results: Dict[str, Any]) -> List[str]:
-        """Extract key findings from analysis results"""
-        findings = []
+    def _json_serializer(self, obj):
+        """JSON serializer for non-standard types"""
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return str(obj)
+    
+    def _generate_text_report(self, results: Dict[str, Any], error: str = None) -> str:
+        """Generate a text-based report as fallback"""
+        lines = []
+        lines.append("=" * 80)
+        lines.append("MALWARESHIELD PRO - ANALYSIS REPORT")
+        lines.append("=" * 80)
+        lines.append("")
         
-        threat_assessment = results.get('threat_assessment', {})
-        if threat_assessment.get('reasons'):
-            findings.extend(threat_assessment['reasons'])
+        if error:
+            lines.append(f"NOTE: PDF generation failed ({error}), using text format")
+            lines.append("")
         
-        # Add VirusTotal findings
+        # File information
+        file_info = results.get('file_info', {})
+        lines.append("FILE INFORMATION")
+        lines.append("-" * 40)
+        lines.append(f"Filename: {file_info.get('filename', 'Unknown')}")
+        lines.append(f"File Size: {self._format_file_size(file_info.get('size', 0))}")
+        lines.append(f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        lines.append("")
+        
+        # Threat assessment
+        threat_info = results.get('threat_assessment', {})
+        lines.append("THREAT ASSESSMENT")
+        lines.append("-" * 40)
+        lines.append(f"Threat Level: {threat_info.get('level', 'UNKNOWN')}")
+        lines.append(f"Threat Score: {threat_info.get('score', 0)}/100")
+        lines.append("")
+        
+        # Analysis summary
+        analysis = results.get('analysis', {})
+        lines.append("ANALYSIS SUMMARY")
+        lines.append("-" * 40)
+        lines.append(f"File Type: {analysis.get('file_type', 'Unknown')}")
+        lines.append(f"Entropy: {analysis.get('entropy', 0):.2f}")
+        lines.append(f"Strings Extracted: {len(analysis.get('strings', []))}")
+        lines.append("")
+        
+        # Patterns
+        patterns = results.get('patterns', {})
+        if patterns:
+            lines.append("DETECTED PATTERNS")
+            lines.append("-" * 40)
+            for category, matches in patterns.items():
+                if matches:
+                    lines.append(f"{category.replace('_', ' ').title()}: {len(matches)} found")
+            lines.append("")
+        
+        # VirusTotal results
         vt_results = results.get('virustotal', {})
-        if 'stats' in vt_results:
-            malicious = vt_results['stats'].get('malicious', 0)
-            if malicious > 0:
-                findings.append(f"VirusTotal detected malware with {malicious} engines")
+        if vt_results and 'stats' in vt_results:
+            stats = vt_results['stats']
+            lines.append("VIRUSTOTAL RESULTS")
+            lines.append("-" * 40)
+            lines.append(f"Detection Ratio: {stats.get('malicious', 0)}/{stats.get('total', 0)}")
+            lines.append(f"Malicious: {stats.get('malicious', 0)}")
+            lines.append(f"Suspicious: {stats.get('suspicious', 0)}")
+            lines.append(f"Clean: {stats.get('harmless', 0)}")
+            lines.append("")
         
-        return findings[:10]  # Limit to top 10 findings
-    
-    def _summarize_strings(self, strings_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Summarize string analysis results"""
-        if not strings_data:
-            return {}
+        # Recommendations
+        recommendations = self._get_recommendations(results)
+        if recommendations:
+            lines.append("RECOMMENDATIONS")
+            lines.append("-" * 40)
+            for i, rec in enumerate(recommendations, 1):
+                lines.append(f"{i}. {rec}")
         
-        return {
-            'total_ascii_strings': strings_data.get('total_ascii', 0),
-            'total_unicode_strings': strings_data.get('total_unicode', 0),
-            'sample_strings': strings_data.get('combined', [])[:20]  # First 20 strings
-        }
-    
-    def _summarize_virustotal(self, vt_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Summarize VirusTotal results"""
-        if 'error' in vt_data:
-            return {'status': 'error', 'message': vt_data['error']}
+        lines.append("")
+        lines.append("=" * 80)
+        lines.append("End of Report")
+        lines.append("=" * 80)
         
-        stats = vt_data.get('stats', {})
-        return {
-            'detection_ratio': f"{stats.get('malicious', 0) + stats.get('suspicious', 0)}/{stats.get('total', 0)}",
-            'malicious_detections': stats.get('malicious', 0),
-            'suspicious_detections': stats.get('suspicious', 0),
-            'scan_date': vt_data.get('scan_date'),
-            'top_detections': list(vt_data.get('scan_results', {}).keys())[:10]
-        }
-    
-    def _identify_threat_vectors(self, results: Dict[str, Any]) -> List[str]:
-        """Identify potential threat vectors"""
-        vectors = []
-        patterns = results.get('patterns', {})
-        
-        if patterns.get('api_network_operations'):
-            vectors.append("Network Communication")
-        
-        if patterns.get('api_file_operations'):
-            vectors.append("File System Modification")
-        
-        if patterns.get('api_registry_operations'):
-            vectors.append("Registry Manipulation")
-        
-        if patterns.get('api_process_operations'):
-            vectors.append("Process Manipulation")
-        
-        if patterns.get('bitcoin_addresses'):
-            vectors.append("Cryptocurrency Operations")
-        
-        return vectors
-    
-    def _extract_behavioral_indicators(self, results: Dict[str, Any]) -> List[str]:
-        """Extract behavioral indicators"""
-        indicators = []
-        
-        suspicious_indicators = results.get('suspicious_indicators', [])
-        for indicator in suspicious_indicators:
-            indicators.append(f"{indicator.get('type', 'Unknown')}: {indicator.get('description', 'No description')}")
-        
-        return indicators
-    
-    def _extract_attribution_hints(self, results: Dict[str, Any]) -> List[str]:
-        """Extract potential attribution hints"""
-        hints = []
-        
-        # This could be expanded with more sophisticated attribution analysis
-        patterns = results.get('patterns', {})
-        
-        if patterns.get('emails'):
-            hints.append("Email addresses found - potential C&C communication")
-        
-        if patterns.get('urls'):
-            hints.append("URLs found - potential data exfiltration endpoints")
-        
-        return hints
-    
-    def _calculate_severity_breakdown(self, results: Dict[str, Any]) -> Dict[str, int]:
-        """Calculate breakdown of severity levels"""
-        breakdown = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
-        
-        indicators = results.get('suspicious_indicators', [])
-        for indicator in indicators:
-            severity = indicator.get('severity', 'low')
-            if severity in breakdown:
-                breakdown[severity] += 1
-        
-        return breakdown
-    
-    def _format_strings_for_report(self, strings_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Format strings data for inclusion in report"""
-        if not strings_data:
-            return {}
-        
-        # Limit strings for report size
-        formatted = {
-            'ascii_strings': strings_data.get('ascii_strings', [])[:100],
-            'unicode_strings': strings_data.get('unicode_strings', [])[:50],
-            'total_count': strings_data.get('total_ascii', 0) + strings_data.get('total_unicode', 0)
-        }
-        
-        return formatted
-
-# Import math for file size formatting
-import math
+        return "\n".join(lines)

@@ -1,462 +1,473 @@
 """
-Threat Scoring Module
+Threat Scorer Module
 
-Advanced threat scoring system that evaluates multiple indicators
-to provide comprehensive threat assessment and risk scoring.
+Provides intelligent threat scoring and risk assessment capabilities based on
+comprehensive analysis of file characteristics, patterns, and external intelligence.
 """
 
+from typing import Dict, List, Any, Tuple
+import re
 import math
-from typing import Dict, Any, List, Tuple
-from collections import Counter
 
 class ThreatScorer:
-    """
-    Advanced threat scoring engine for malware analysis
-    """
+    """Advanced threat scoring engine for malware risk assessment"""
     
     def __init__(self):
-        """Initialize the threat scorer with scoring matrices"""
-        self.entropy_weights = self._initialize_entropy_weights()
-        self.pattern_weights = self._initialize_pattern_weights()
-        self.api_weights = self._initialize_api_weights()
-        self.virustotal_weights = self._initialize_virustotal_weights()
-        self.file_type_weights = self._initialize_file_type_weights()
-        
-    def _initialize_entropy_weights(self) -> Dict[str, Dict[str, float]]:
-        """Initialize entropy-based scoring weights"""
-        return {
-            'thresholds': {
-                'very_high': 7.8,    # Extremely high entropy (packed/encrypted)
-                'high': 7.0,         # High entropy (compressed/obfuscated)
-                'moderate': 5.5,     # Moderate entropy (mixed content)
-                'low': 3.0           # Low entropy (plain text/code)
-            },
-            'scores': {
-                'very_high': 40,
-                'high': 25,
-                'moderate': 10,
-                'low': 0
-            }
-        }
-    
-    def _initialize_pattern_weights(self) -> Dict[str, float]:
-        """Initialize pattern-based scoring weights"""
-        return {
-            'bitcoin_addresses': 35,
-            'ethereum_addresses': 30,
-            'urls': 8,
-            'emails': 5,
-            'ip_addresses': 12,
-            'file_paths': 3,
-            'registry_keys': 15,
-            'base64_data': 8,
-            'hex_data': 5,
-            'phone_numbers': 2,
-            'credit_cards': 20,
-            'social_security': 25,
-            'passwords': 18
-        }
-    
-    def _initialize_api_weights(self) -> Dict[str, float]:
-        """Initialize API call pattern scoring weights"""
-        return {
-            'api_file_operations': 10,
-            'api_registry_operations': 20,
-            'api_process_operations': 25,
-            'api_memory_operations': 30,
-            'api_network_operations': 15,
-            'api_crypto_operations': 35,
-            'api_service_operations': 25,
-            'api_debug_operations': 40,
-            'api_injection_operations': 50,
-            'api_persistence_operations': 30
-        }
-    
-    def _initialize_virustotal_weights(self) -> Dict[str, Any]:
-        """Initialize VirusTotal scoring weights"""
-        return {
-            'malicious_multiplier': 8,      # Each malicious detection adds this score
-            'suspicious_multiplier': 3,     # Each suspicious detection adds this score
-            'detection_ratio_bonus': {
-                'very_high': 30,    # >50% detection ratio
-                'high': 20,         # >25% detection ratio
-                'medium': 10,       # >10% detection ratio
-                'low': 0            # <10% detection ratio
-            }
-        }
-    
-    def _initialize_file_type_weights(self) -> Dict[str, float]:
-        """Initialize file type risk scoring"""
-        return {
-            'pe_executable': 15,
-            'elf_executable': 15,
-            'script_batch': 20,
-            'script_powershell': 25,
-            'script_vbs': 20,
-            'script_js': 15,
-            'office_doc': 10,
-            'pdf': 8,
-            'java_class': 12,
-            'unknown': 5
+        """Initialize the threat scorer"""
+        self.scoring_weights = self._initialize_weights()
+        self.threat_thresholds = {
+            'CLEAN': (0, 20),
+            'LOW': (21, 40), 
+            'MEDIUM': (41, 65),
+            'HIGH': (66, 85),
+            'CRITICAL': (86, 100)
         }
     
     def calculate_score(self, analysis_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Calculate comprehensive threat score based on analysis data
+        """Calculate comprehensive threat score
         
         Args:
-            analysis_data (dict): Complete analysis results
+            analysis_data: Complete analysis results
             
         Returns:
-            dict: Detailed threat scoring results
+            dict: Threat assessment with score, level, and reasoning
         """
         try:
             # Initialize scoring components
-            score_breakdown = {
-                'entropy_score': 0,
-                'pattern_score': 0,
-                'api_score': 0,
-                'virustotal_score': 0,
-                'file_type_score': 0,
-                'suspicious_indicators_score': 0,
-                'size_anomaly_score': 0
+            scores = {
+                'entropy': 0,
+                'file_size': 0,
+                'patterns': 0,
+                'strings': 0,
+                'virustotal': 0,
+                'signatures': 0,
+                'file_type': 0,
+                'metadata': 0
             }
             
             reasons = []
-            confidence_factors = []
             
             # Calculate individual component scores
-            score_breakdown['entropy_score'], entropy_reasons = self._score_entropy(analysis_data)
+            scores['entropy'], entropy_reasons = self._score_entropy(analysis_data)
+            scores['file_size'], size_reasons = self._score_file_size(analysis_data)
+            scores['patterns'], pattern_reasons = self._score_patterns(analysis_data)
+            scores['strings'], string_reasons = self._score_strings(analysis_data)
+            scores['virustotal'], vt_reasons = self._score_virustotal(analysis_data)
+            scores['signatures'], sig_reasons = self._score_signatures(analysis_data)
+            scores['file_type'], type_reasons = self._score_file_type(analysis_data)
+            scores['metadata'], meta_reasons = self._score_metadata(analysis_data)
+            
+            # Combine all reasons
             reasons.extend(entropy_reasons)
-            
-            score_breakdown['pattern_score'], pattern_reasons = self._score_patterns(analysis_data)
-            reasons.extend(pattern_reasons)
-            
-            score_breakdown['api_score'], api_reasons = self._score_api_patterns(analysis_data)
-            reasons.extend(api_reasons)
-            
-            score_breakdown['virustotal_score'], vt_reasons, vt_confidence = self._score_virustotal(analysis_data)
-            reasons.extend(vt_reasons)
-            confidence_factors.append(vt_confidence)
-            
-            score_breakdown['file_type_score'], filetype_reasons = self._score_file_type(analysis_data)
-            reasons.extend(filetype_reasons)
-            
-            score_breakdown['suspicious_indicators_score'], indicator_reasons = self._score_suspicious_indicators(analysis_data)
-            reasons.extend(indicator_reasons)
-            
-            score_breakdown['size_anomaly_score'], size_reasons = self._score_size_anomalies(analysis_data)
             reasons.extend(size_reasons)
+            reasons.extend(pattern_reasons)
+            reasons.extend(string_reasons)
+            reasons.extend(vt_reasons)
+            reasons.extend(sig_reasons)
+            reasons.extend(type_reasons)
+            reasons.extend(meta_reasons)
             
-            # Calculate total score
-            total_score = sum(score_breakdown.values())
-            
-            # Apply score modifiers
-            total_score, modifier_reasons = self._apply_score_modifiers(total_score, analysis_data)
-            reasons.extend(modifier_reasons)
-            
-            # Cap score at 100
-            final_score = min(total_score, 100)
+            # Calculate weighted total score
+            total_score = self._calculate_weighted_score(scores)
             
             # Determine threat level
-            threat_level = self._determine_threat_level(final_score)
+            threat_level = self._determine_threat_level(total_score)
             
-            # Calculate confidence
-            confidence = self._calculate_confidence(score_breakdown, confidence_factors)
+            # Apply threat level modifiers
+            total_score, threat_level = self._apply_modifiers(total_score, threat_level, analysis_data)
             
             return {
+                'score': min(100, max(0, int(total_score))),
                 'level': threat_level,
-                'score': round(final_score, 1),
-                'confidence': confidence,
                 'reasons': reasons[:15],  # Limit to top 15 reasons
-                'score_breakdown': score_breakdown,
-                'total_raw_score': round(total_score, 1),
-                'risk_assessment': self._generate_risk_assessment(threat_level, final_score, confidence)
+                'component_scores': scores,
+                'raw_score': total_score
             }
             
         except Exception as e:
             return {
-                'level': 'UNKNOWN',
                 'score': 0,
-                'confidence': 'low',
-                'reasons': [f"Scoring error: {str(e)}"],
-                'error': True
+                'level': 'ERROR',
+                'reasons': [f'Scoring failed: {str(e)}'],
+                'component_scores': {},
+                'raw_score': 0
             }
     
-    def _score_entropy(self, data: Dict[str, Any]) -> Tuple[float, List[str]]:
-        """Score based on entropy analysis"""
-        entropy_data = data.get('entropy', {})
-        if not entropy_data:
-            return 0, []
+    def _initialize_weights(self) -> Dict[str, float]:
+        """Initialize scoring weights for different components"""
+        return {
+            'entropy': 0.15,      # File entropy analysis
+            'file_size': 0.05,    # File size characteristics
+            'patterns': 0.25,     # Suspicious patterns detected
+            'strings': 0.10,      # String analysis results
+            'virustotal': 0.30,   # VirusTotal detection results
+            'signatures': 0.10,   # Known malware signatures
+            'file_type': 0.03,    # File type risk assessment
+            'metadata': 0.02      # File metadata analysis
+        }
+    
+    def _score_entropy(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on file entropy
         
-        score = 0
+        Args:
+            analysis_data: Analysis results
+            
+        Returns:
+            tuple: (score, reasons)
+        """
+        entropy = analysis_data.get('entropy', 0)
         reasons = []
         
-        # Overall entropy scoring
-        overall_entropy = entropy_data.get('overall_entropy', 0)
-        if isinstance(overall_entropy, dict):
-            overall_entropy = overall_entropy.get('overall_entropy', 0)
-        
-        thresholds = self.entropy_weights['thresholds']
-        scores = self.entropy_weights['scores']
-        
-        if overall_entropy >= thresholds['very_high']:
-            score += scores['very_high']
-            reasons.append(f"Very high entropy ({overall_entropy:.2f}) suggests heavy encryption/packing")
-        elif overall_entropy >= thresholds['high']:
-            score += scores['high']
-            reasons.append(f"High entropy ({overall_entropy:.2f}) indicates compression/obfuscation")
-        elif overall_entropy >= thresholds['moderate']:
-            score += scores['moderate']
-            reasons.append(f"Moderate entropy ({overall_entropy:.2f}) shows mixed content")
-        
-        # High entropy sections bonus
-        high_entropy_sections = entropy_data.get('high_entropy_sections', 0)
-        if high_entropy_sections > 5:
-            bonus = min(high_entropy_sections * 2, 20)
-            score += bonus
-            reasons.append(f"Multiple high-entropy sections detected ({high_entropy_sections})")
+        if entropy >= 7.8:
+            score = 80
+            reasons.append(f"Very high entropy ({entropy:.2f}) - likely packed or encrypted")
+        elif entropy >= 7.5:
+            score = 60
+            reasons.append(f"High entropy ({entropy:.2f}) - possible packing detected")
+        elif entropy >= 6.5:
+            score = 30
+            reasons.append(f"Moderate entropy ({entropy:.2f}) - some compression/encoding")
+        elif entropy <= 1.0:
+            score = 5
+            reasons.append(f"Very low entropy ({entropy:.2f}) - unusual for executable files")
+        else:
+            score = 0
+            reasons.append(f"Normal entropy ({entropy:.2f})")
         
         return score, reasons
     
-    def _score_patterns(self, data: Dict[str, Any]) -> Tuple[float, List[str]]:
-        """Score based on pattern detection"""
-        patterns = data.get('patterns', {})
-        if not patterns:
-            return 0, []
+    def _score_file_size(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on file size characteristics
         
+        Args:
+            analysis_data: Analysis results
+            
+        Returns:
+            tuple: (score, reasons)
+        """
+        file_size = analysis_data.get('file_size', 0)
+        reasons = []
+        
+        if file_size < 1024:  # Less than 1KB
+            score = 25
+            reasons.append(f"Suspiciously small file size ({file_size} bytes)")
+        elif file_size > 100 * 1024 * 1024:  # Greater than 100MB
+            score = 15
+            reasons.append(f"Unusually large file size ({self._format_size(file_size)})")
+        elif file_size < 10 * 1024:  # Less than 10KB
+            score = 10
+            reasons.append(f"Small file size ({self._format_size(file_size)}) - typical for droppers")
+        else:
+            score = 0
+        
+        return score, reasons
+    
+    def _score_patterns(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on detected suspicious patterns
+        
+        Args:
+            analysis_data: Analysis results
+            
+        Returns:
+            tuple: (score, reasons)
+        """
+        patterns = analysis_data.get('patterns', {})
         score = 0
         reasons = []
         
+        pattern_weights = {
+            'crypto': 40,           # Cryptocurrency indicators
+            'network': 30,          # Network-related patterns
+            'system': 25,           # System manipulation
+            'malware': 50,          # Known malware indicators
+            'persistence': 35,      # Persistence mechanisms
+            'steganography': 45,    # Steganography indicators
+            'suspicious_apis': 30,  # Suspicious API calls
+            'registry_keys': 20,    # Registry manipulation
+            'file_paths': 15,       # Suspicious file paths
+            'urls': 25,            # URLs in binary
+            'ips': 30,             # IP addresses
+            'emails': 10,          # Email addresses
+            'bitcoin_addresses': 45, # Bitcoin addresses
+            'ethereum_addresses': 45 # Ethereum addresses
+        }
+        
         for pattern_type, matches in patterns.items():
-            if matches and pattern_type in self.pattern_weights:
-                pattern_score = self.pattern_weights[pattern_type]
+            if matches:
+                pattern_score = pattern_weights.get(pattern_type, 10)
+                match_count = len(matches)
                 
                 # Scale score based on number of matches
-                if len(matches) > 5:
-                    pattern_score *= 1.5
-                elif len(matches) > 10:
-                    pattern_score *= 2.0
+                if match_count > 10:
+                    multiplier = 2.0
+                elif match_count > 5:
+                    multiplier = 1.5
+                else:
+                    multiplier = 1.0
                 
-                score += pattern_score
-                reasons.append(f"{pattern_type.replace('_', ' ').title()}: {len(matches)} found")
+                component_score = min(pattern_score * multiplier, 70)
+                score += component_score
+                
+                reasons.append(f"{pattern_type.replace('_', ' ').title()}: {match_count} matches (+{component_score:.0f} points)")
         
-        return score, reasons
+        return min(score, 100), reasons
     
-    def _score_api_patterns(self, data: Dict[str, Any]) -> Tuple[float, List[str]]:
-        """Score based on API call patterns"""
-        patterns = data.get('patterns', {})
-        if not patterns:
-            return 0, []
+    def _score_strings(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on string analysis
         
+        Args:
+            analysis_data: Analysis results
+            
+        Returns:
+            tuple: (score, reasons)
+        """
+        strings = analysis_data.get('strings', [])
         score = 0
         reasons = []
         
-        for pattern_type, matches in patterns.items():
-            if matches and pattern_type in self.api_weights:
-                api_score = self.api_weights[pattern_type]
-                
-                # Critical APIs get higher scoring
-                if pattern_type == 'api_injection_operations':
-                    api_score *= 1.5
-                elif pattern_type == 'api_debug_operations':
-                    api_score *= 1.3
-                
-                score += api_score
-                reasons.append(f"{pattern_type.replace('api_', '').replace('_', ' ').title()} APIs detected")
+        if not strings:
+            score = 20
+            reasons.append("No readable strings found - possible obfuscation")
+            return score, reasons
         
-        return score, reasons
+        string_count = len(strings)
+        
+        # Analyze string characteristics
+        suspicious_keywords = [
+            'password', 'keylog', 'backdoor', 'trojan', 'virus',
+            'malware', 'decrypt', 'encrypt', 'ransom', 'bitcoin',
+            'payload', 'shellcode', 'exploit', 'injection', 'rootkit'
+        ]
+        
+        suspicious_count = 0
+        for string_val in strings:
+            string_lower = string_val.lower()
+            for keyword in suspicious_keywords:
+                if keyword in string_lower:
+                    suspicious_count += 1
+                    break
+        
+        if suspicious_count > 0:
+            score = min(suspicious_count * 15, 60)
+            reasons.append(f"{suspicious_count} suspicious keywords found in strings")
+        
+        # Check for very few strings (possible packing)
+        if string_count < 10:
+            score += 15
+            reasons.append(f"Very few strings extracted ({string_count}) - possible packing")
+        elif string_count < 50:
+            score += 5
+            reasons.append(f"Few strings extracted ({string_count}) - minimal text content")
+        
+        return min(score, 80), reasons
     
-    def _score_virustotal(self, data: Dict[str, Any]) -> Tuple[float, List[str], str]:
-        """Score based on VirusTotal results"""
-        vt_data = data.get('virustotal', {})
+    def _score_virustotal(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on VirusTotal results
+        
+        Args:
+            analysis_data: Analysis results
+            
+        Returns:
+            tuple: (score, reasons)
+        """
+        vt_data = analysis_data.get('virustotal', {})
+        
         if 'error' in vt_data or not vt_data:
-            return 0, [], 'low'
-        
-        score = 0
-        reasons = []
-        confidence = 'high'
+            return 0, ["No VirusTotal data available"]
         
         stats = vt_data.get('stats', {})
-        if not stats:
-            return 0, [], 'low'
-        
         malicious = stats.get('malicious', 0)
         suspicious = stats.get('suspicious', 0)
-        total = stats.get('total', 1)
+        total = stats.get('total', 0)
         
-        # Score based on detections
-        malicious_score = malicious * self.virustotal_weights['malicious_multiplier']
-        suspicious_score = suspicious * self.virustotal_weights['suspicious_multiplier']
+        if total == 0:
+            return 0, ["No VirusTotal engines reported"]
         
-        score += malicious_score + suspicious_score
+        # Calculate detection percentage
+        detection_percentage = ((malicious + suspicious) / total) * 100
         
-        if malicious > 0:
-            reasons.append(f"VirusTotal: {malicious} engines detected malware")
-        if suspicious > 0:
-            reasons.append(f"VirusTotal: {suspicious} engines flagged as suspicious")
+        reasons = []
         
-        # Detection ratio bonus
-        detection_ratio = (malicious + suspicious) / max(total, 1)
-        ratio_bonus = self.virustotal_weights['detection_ratio_bonus']
-        
-        if detection_ratio > 0.5:
-            score += ratio_bonus['very_high']
-            reasons.append(f"Very high detection ratio ({detection_ratio*100:.1f}%)")
-        elif detection_ratio > 0.25:
-            score += ratio_bonus['high']
-            reasons.append(f"High detection ratio ({detection_ratio*100:.1f}%)")
-        elif detection_ratio > 0.1:
-            score += ratio_bonus['medium']
-            reasons.append(f"Moderate detection ratio ({detection_ratio*100:.1f}%)")
-        
-        # Adjust confidence based on total engines
-        if total < 10:
-            confidence = 'low'
-        elif total < 30:
-            confidence = 'medium'
+        if malicious > 20:
+            score = 95
+            reasons.append(f"High malware detection: {malicious}/{total} engines ({detection_percentage:.1f}%)")
+        elif malicious > 10:
+            score = 85
+            reasons.append(f"Significant malware detection: {malicious}/{total} engines ({detection_percentage:.1f}%)")
+        elif malicious > 5:
+            score = 70
+            reasons.append(f"Multiple engines detected threats: {malicious}/{total} engines ({detection_percentage:.1f}%)")
+        elif malicious > 2:
+            score = 50
+            reasons.append(f"Several engines detected threats: {malicious}/{total} engines ({detection_percentage:.1f}%)")
+        elif malicious > 0:
+            score = 35
+            reasons.append(f"Some engines detected threats: {malicious}/{total} engines ({detection_percentage:.1f}%)")
+        elif suspicious > 5:
+            score = 25
+            reasons.append(f"Multiple engines flagged as suspicious: {suspicious}/{total} engines")
+        elif suspicious > 0:
+            score = 10
+            reasons.append(f"Some engines flagged as suspicious: {suspicious}/{total} engines")
         else:
-            confidence = 'high'
+            score = 0
+            reasons.append(f"Clean VirusTotal scan: 0/{total} detections")
         
-        return score, reasons, confidence
+        return score, reasons
     
-    def _score_file_type(self, data: Dict[str, Any]) -> Tuple[float, List[str]]:
-        """Score based on file type and signature analysis"""
-        file_signature = data.get('file_signature', {})
-        if not file_signature:
+    def _score_signatures(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on malware signature matches
+        
+        Args:
+            analysis_data: Analysis results
+            
+        Returns:
+            tuple: (score, reasons)
+        """
+        # This would be populated by the analysis engine
+        signatures = analysis_data.get('signatures', {})
+        matches = signatures.get('matches', [])
+        
+        if not matches:
             return 0, []
         
         score = 0
         reasons = []
         
-        detected_types = file_signature.get('detected_types', [])
-        for file_type in detected_types:
-            if file_type in self.file_type_weights:
-                type_score = self.file_type_weights[file_type]
-                score += type_score
-                reasons.append(f"File type: {file_type.replace('_', ' ').title()}")
+        severity_scores = {
+            'critical': 90,
+            'high': 70,
+            'medium': 50,
+            'low': 30
+        }
         
-        # Signature mismatch penalty
-        file_info = data.get('file_info', {})
-        if file_info:
-            extension = file_info.get('extension', '').lower()
-            primary_type = file_signature.get('primary_type', 'unknown')
+        for match in matches:
+            severity = match.get('severity', 'medium')
+            match_score = severity_scores.get(severity, 50)
+            score = max(score, match_score)  # Take highest severity
             
-            # Check for common mismatches
-            mismatch_detected = False
-            if extension == '.txt' and primary_type == 'pe_executable':
-                mismatch_detected = True
-            elif extension == '.pdf' and primary_type != 'pdf':
-                mismatch_detected = True
-            elif extension == '.doc' and primary_type != 'office_doc':
-                mismatch_detected = True
+            reasons.append(f"Malware signature detected: {match.get('name', 'Unknown')} (Severity: {severity})")
+        
+        return min(score, 100), reasons
+    
+    def _score_file_type(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on file type risk assessment
+        
+        Args:
+            analysis_data: Analysis results
             
-            if mismatch_detected:
-                score += 25
-                reasons.append(f"File extension mismatch: {extension} vs {primary_type}")
+        Returns:
+            tuple: (score, reasons)
+        """
+        file_type = analysis_data.get('file_type', '').lower()
+        reasons = []
+        
+        high_risk_types = ['exe', 'dll', 'scr', 'bat', 'cmd', 'ps1', 'vbs', 'js']
+        medium_risk_types = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx']
+        executable_types = ['application/x-executable', 'application/x-msdos-program']
+        
+        if any(risk_type in file_type for risk_type in executable_types):
+            score = 20
+            reasons.append(f"Executable file type detected: {file_type}")
+        elif any(risk_type in file_type for risk_type in high_risk_types):
+            score = 15
+            reasons.append(f"High-risk file type: {file_type}")
+        elif any(risk_type in file_type for risk_type in medium_risk_types):
+            score = 10
+            reasons.append(f"Medium-risk file type: {file_type}")
+        else:
+            score = 0
         
         return score, reasons
     
-    def _score_suspicious_indicators(self, data: Dict[str, Any]) -> Tuple[float, List[str]]:
-        """Score based on suspicious indicators"""
-        indicators = data.get('suspicious_indicators', [])
-        if not indicators:
-            return 0, []
+    def _score_metadata(self, analysis_data: Dict[str, Any]) -> Tuple[float, List[str]]:
+        """Score based on file metadata analysis
         
-        score = 0
-        reasons = []
-        
-        severity_scores = {'high': 20, 'medium': 10, 'low': 5}
-        
-        for indicator in indicators:
-            severity = indicator.get('severity', 'low')
-            indicator_score = severity_scores.get(severity, 5)
-            score += indicator_score
+        Args:
+            analysis_data: Analysis results
             
-            description = indicator.get('description', 'Unknown indicator')
-            reasons.append(f"{severity.upper()}: {description}")
-        
-        return score, reasons
+        Returns:
+            tuple: (score, reasons)
+        """
+        # Placeholder for metadata analysis
+        # Could include PE headers, digital signatures, etc.
+        return 0, []
     
-    def _score_size_anomalies(self, data: Dict[str, Any]) -> Tuple[float, List[str]]:
-        """Score based on file size anomalies"""
-        file_size = data.get('file_size', 0)
-        if file_size == 0:
-            return 0, []
+    def _calculate_weighted_score(self, scores: Dict[str, float]) -> float:
+        """Calculate weighted total score
         
-        score = 0
-        reasons = []
+        Args:
+            scores: Individual component scores
+            
+        Returns:
+            float: Weighted total score
+        """
+        total_score = 0
         
-        # Very small executable files are suspicious
-        file_signature = data.get('file_signature', {})
-        detected_types = file_signature.get('detected_types', [])
+        for component, score in scores.items():
+            weight = self.scoring_weights.get(component, 0)
+            total_score += score * weight
         
-        if any(t in detected_types for t in ['pe_executable', 'elf_executable']) and file_size < 1024:
-            score += 15
-            reasons.append(f"Unusually small executable ({file_size} bytes)")
-        
-        # Very large files might contain embedded content
-        if file_size > 50 * 1024 * 1024:  # 50MB
-            score += 10
-            reasons.append(f"Large file size ({file_size} bytes) may contain embedded content")
-        
-        return score, reasons
-    
-    def _apply_score_modifiers(self, score: float, data: Dict[str, Any]) -> Tuple[float, List[str]]:
-        """Apply additional score modifiers based on combinations"""
-        modified_score = score
-        reasons = []
-        
-        patterns = data.get('patterns', {})
-        
-        # Combination bonuses
-        has_crypto = bool(patterns.get('bitcoin_addresses') or patterns.get('ethereum_addresses'))
-        has_injection = bool(patterns.get('api_injection_operations'))
-        has_persistence = bool(patterns.get('api_persistence_operations'))
-        has_anti_debug = bool(patterns.get('api_debug_operations'))
-        
-        # Crypto + injection combo (ransomware pattern)
-        if has_crypto and has_injection:
-            modified_score *= 1.3
-            reasons.append("Cryptocurrency + injection pattern (potential ransomware)")
-        
-        # Persistence + anti-debugging (advanced malware)
-        if has_persistence and has_anti_debug:
-            modified_score *= 1.2
-            reasons.append("Persistence + anti-debugging (sophisticated threat)")
-        
-        # Multiple API categories (complex malware)
-        api_categories = len([k for k in patterns.keys() if k.startswith('api_') and patterns[k]])
-        if api_categories >= 5:
-            modified_score *= 1.1
-            reasons.append(f"Multiple API categories used ({api_categories})")
-        
-        return modified_score, reasons
+        return total_score
     
     def _determine_threat_level(self, score: float) -> str:
-        """Determine threat level based on final score"""
-        if score >= 80:
-            return 'CRITICAL'
-        elif score >= 60:
-            return 'HIGH'
-        elif score >= 35:
-            return 'MEDIUM'
-        elif score >= 15:
-            return 'LOW'
-        else:
-            return 'CLEAN'
+        """Determine threat level based on score
+        
+        Args:
+            score: Calculated threat score
+            
+        Returns:
+            str: Threat level
+        """
+        for level, (min_score, max_score) in self.threat_thresholds.items():
+            if min_score <= score <= max_score:
+                return level
+        
+        return 'UNKNOWN'
     
-    def _calculate_confidence(self, score_breakdown: Dict[str, float], confidence_factors: List[str]) -> str:
-        """Calculate overall confidence in the assessment"""
-        # Count non-zero scoring components
-        active_components = sum([server])
-headless = true
-address = "0.0.0.0"
-port = 5000
-
-[theme]
-primaryColor = "#ff4b4b"
-backgroundColor = "#0e1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#fafafa"
-base = "dark"
+    def _apply_modifiers(self, score: float, threat_level: str, analysis_data: Dict[str, Any]) -> Tuple[float, str]:
+        """Apply final modifiers to score and threat level
+        
+        Args:
+            score: Current score
+            threat_level: Current threat level
+            analysis_data: Analysis results
+            
+        Returns:
+            tuple: (modified_score, modified_threat_level)
+        """
+        # Boost score for multiple concerning factors
+        concerning_factors = 0
+        
+        # High entropy + suspicious patterns
+        if analysis_data.get('entropy', 0) > 7.5 and analysis_data.get('patterns', {}):
+            concerning_factors += 1
+        
+        # VirusTotal detections + local analysis flags
+        vt_data = analysis_data.get('virustotal', {})
+        if vt_data.get('stats', {}).get('malicious', 0) > 0 and analysis_data.get('patterns', {}):
+            concerning_factors += 1
+        
+        # Signature matches + other indicators
+        signatures = analysis_data.get('signatures', {})
+        if signatures.get('matches', []) and analysis_data.get('patterns', {}):
+            concerning_factors += 1
+        
+        # Apply modifiers
+        if concerning_factors >= 2:
+            score = min(score * 1.2, 100)  # 20% boost
+            # Potentially upgrade threat level
+            if threat_level == 'MEDIUM' and score > 70:
+                threat_level = 'HIGH'
+            elif threat_level == 'HIGH' and score > 90:
+                threat_level = 'CRITICAL'
+        
+        return score, threat_level
+    
+    def _format_size(self, size_bytes: int) -> str:
+        """Format file size for display"""
+        for unit in ['B', 'KB', 'MB', 'GB']:
+            if size_bytes < 1024.0:
+                return f"{size_bytes:.1f} {unit}"
+            size_bytes /= 1024.0
+        return f"{size_bytes:.1f} TB"
