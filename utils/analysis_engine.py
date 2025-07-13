@@ -11,7 +11,12 @@ import string
 import hashlib
 from collections import Counter
 from typing import Dict, List, Any, Tuple
-import magic
+
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except ImportError:
+    MAGIC_AVAILABLE = False
 
 class AnalysisEngine:
     """Core analysis engine for local file scanning and threat detection"""
@@ -86,12 +91,12 @@ class AnalysisEngine:
         """
         try:
             # Try to use python-magic for file type detection
-            try:
-                import magic
-                mime_type = magic.from_buffer(file_data, mime=True)
-                return mime_type
-            except ImportError:
-                pass
+            if MAGIC_AVAILABLE:
+                try:
+                    mime_type = magic.from_buffer(file_data, mime=True)
+                    return mime_type
+                except Exception:
+                    pass
             
             # Fallback to extension-based detection
             if '.' in filename:

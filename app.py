@@ -14,13 +14,11 @@ import io
 import math
 import string
 import json
-import base64
 from datetime import datetime
 from collections import Counter
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 
 # Import utility modules with proper error handling
 try:
@@ -73,12 +71,17 @@ except ImportError as e:
             return {"score": 0, "level": "UNKNOWN", "reasons": ["Threat scorer not available"]}
 
 try:
-    from assets.lottie_animations import get_lottie_animation, display_lottie
+    from assets.lottie_animations import get_lottie_animation, display_lottie, show_result_animation
 except ImportError as e:
     def get_lottie_animation(animation_type):
         return None
     def display_lottie(animation_data, key):
         st.info("🔍 Scanning in progress...")
+    def show_result_animation(threat_level):
+        if threat_level in ['CRITICAL', 'HIGH']:
+            st.warning("⚠️ Threat detected!")
+        else:
+            st.success("✅ Analysis complete")
 
 # Configure page with dark theme
 st.set_page_config(
@@ -93,17 +96,19 @@ st.markdown("""
 <style>
 /* Main application styling */
 .main {
-    background-color: #0e1117;
+    background: linear-gradient(135deg, #0e1117 0%, #1a1d29 100%);
     color: #fafafa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .stApp {
-    background-color: #0e1117;
+    background: linear-gradient(135deg, #0e1117 0%, #1a1d29 100%);
 }
 
 /* Sidebar styling */
 .css-1d391kg, .css-1544g2n {
-    background-color: #262730;
+    background: linear-gradient(180deg, #262730 0%, #1e1f26 100%);
+    border-right: 2px solid #00aaff20;
 }
 
 /* Alert and notification styling */
@@ -111,67 +116,181 @@ st.markdown("""
     background-color: #262730;
     border: 1px solid #444;
     color: #fafafa;
+    border-radius: 10px;
 }
 
-/* Threat level banners */
+/* File uploader styling */
+.stFileUploader {
+    background: linear-gradient(135deg, #262730, #1a1d29);
+    border: 2px dashed #00aaff;
+    border-radius: 15px;
+    padding: 25px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.stFileUploader:hover {
+    border-color: #0088cc;
+    box-shadow: 0 0 20px rgba(0, 170, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Modern card styling */
+.scan-card {
+    background: linear-gradient(135deg, #262730, #1a1d29);
+    padding: 25px;
+    border-radius: 15px;
+    border: 1px solid #444;
+    margin: 15px 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.scan-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0, 170, 255, 0.1);
+    border-color: #00aaff;
+}
+
+/* Professional header with glassmorphism */
+.main-header {
+    background: linear-gradient(135deg, rgba(26, 29, 41, 0.9), rgba(14, 17, 23, 0.9));
+    backdrop-filter: blur(20px);
+    padding: 40px 30px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin-bottom: 30px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.main-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(0, 170, 255, 0.1) 50%, transparent 70%);
+    pointer-events: none;
+}
+
+.main-header h1 {
+    font-size: 3em;
+    margin: 0;
+    background: linear-gradient(135deg, #00aaff, #0088cc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: bold;
+}
+
+.main-header h3 {
+    color: #cccccc;
+    font-weight: 300;
+    margin: 10px 0;
+}
+
+/* Enhanced threat level banners with animations */
 .threat-critical {
     background: linear-gradient(135deg, #8B0000, #DC143C);
-    padding: 20px;
-    border-radius: 12px;
+    padding: 25px;
+    border-radius: 15px;
     color: white;
     font-weight: bold;
     text-align: center;
-    margin: 15px 0;
-    box-shadow: 0 4px 8px rgba(220, 20, 60, 0.3);
+    margin: 20px 0;
+    box-shadow: 0 8px 32px rgba(220, 20, 60, 0.4);
     border: 2px solid #FF1744;
+    animation: pulse-critical 2s infinite;
+    position: relative;
+    overflow: hidden;
+}
+
+.threat-critical::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #FF1744, #DC143C, #8B0000, #FF1744);
+    border-radius: 15px;
+    z-index: -1;
+    animation: gradient-rotate 3s linear infinite;
+}
+
+@keyframes pulse-critical {
+    0%, 100% { transform: scale(1); box-shadow: 0 8px 32px rgba(220, 20, 60, 0.4); }
+    50% { transform: scale(1.02); box-shadow: 0 12px 40px rgba(220, 20, 60, 0.6); }
 }
 
 .threat-high {
     background: linear-gradient(135deg, #FF4500, #FF6347);
-    padding: 20px;
-    border-radius: 12px;
+    padding: 25px;
+    border-radius: 15px;
     color: white;
     font-weight: bold;
     text-align: center;
-    margin: 15px 0;
-    box-shadow: 0 4px 8px rgba(255, 99, 71, 0.3);
+    margin: 20px 0;
+    box-shadow: 0 8px 32px rgba(255, 99, 71, 0.4);
     border: 2px solid #FF5722;
+    animation: pulse-high 2.5s infinite;
+}
+
+@keyframes pulse-high {
+    0%, 100% { box-shadow: 0 8px 32px rgba(255, 99, 71, 0.4); }
+    50% { box-shadow: 0 12px 40px rgba(255, 99, 71, 0.6); }
 }
 
 .threat-medium {
     background: linear-gradient(135deg, #FF8C00, #FFA500);
-    padding: 20px;
-    border-radius: 12px;
+    padding: 25px;
+    border-radius: 15px;
     color: white;
     font-weight: bold;
     text-align: center;
-    margin: 15px 0;
-    box-shadow: 0 4px 8px rgba(255, 165, 0, 0.3);
+    margin: 20px 0;
+    box-shadow: 0 8px 32px rgba(255, 165, 0, 0.4);
     border: 2px solid #FF9800;
 }
 
 .threat-low {
     background: linear-gradient(135deg, #228B22, #32CD32);
-    padding: 20px;
-    border-radius: 12px;
+    padding: 25px;
+    border-radius: 15px;
     color: white;
     font-weight: bold;
     text-align: center;
-    margin: 15px 0;
-    box-shadow: 0 4px 8px rgba(50, 205, 50, 0.3);
+    margin: 20px 0;
+    box-shadow: 0 8px 32px rgba(50, 205, 50, 0.4);
     border: 2px solid #4CAF50;
 }
 
 .threat-clean {
     background: linear-gradient(135deg, #228B22, #32CD32);
-    padding: 20px;
-    border-radius: 12px;
+    padding: 25px;
+    border-radius: 15px;
     color: white;
     font-weight: bold;
     text-align: center;
-    margin: 15px 0;
-    box-shadow: 0 4px 8px rgba(50, 205, 50, 0.3);
+    margin: 20px 0;
+    box-shadow: 0 8px 32px rgba(50, 205, 50, 0.4);
     border: 2px solid #4CAF50;
+    animation: pulse-clean 3s infinite;
+}
+
+@keyframes pulse-clean {
+    0%, 100% { box-shadow: 0 8px 32px rgba(50, 205, 50, 0.4); }
+    50% { box-shadow: 0 12px 40px rgba(50, 205, 50, 0.6); }
+}
+
+@keyframes gradient-rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* Metric cards */
@@ -227,20 +346,116 @@ st.markdown("""
     box-shadow: 0 2px 4px rgba(255, 170, 68, 0.1);
 }
 
-/* Button styling */
+/* Enhanced button styling */
 .stButton > button {
-    background: linear-gradient(135deg, #262730, #1a1d29);
-    border: 1px solid #444;
-    color: #fafafa;
-    border-radius: 8px;
-    padding: 0.5em 1em;
-    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #00aaff, #0088cc);
+    border: none;
+    color: white;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-weight: 600;
+    font-size: 16px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(0, 170, 255, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.stButton > button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.5s ease;
+}
+
+.stButton > button:hover::before {
+    left: 100%;
 }
 
 .stButton > button:hover {
-    background: linear-gradient(135deg, #1a1d29, #262730);
+    background: linear-gradient(135deg, #0088cc, #006699);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 170, 255, 0.4);
+}
+
+.stButton > button:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 15px rgba(0, 170, 255, 0.3);
+}
+
+/* Radio button styling */
+.stRadio > div {
+    background: linear-gradient(135deg, #262730, #1a1d29);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #444;
+}
+
+/* Text input styling */
+.stTextInput > div > div > input {
+    background: linear-gradient(135deg, #262730, #1a1d29);
+    color: #fafafa;
+    border: 2px solid #444;
+    border-radius: 10px;
+    padding: 12px 16px;
+    transition: all 0.3s ease;
+}
+
+.stTextInput > div > div > input:focus {
     border-color: #00aaff;
-    box-shadow: 0 2px 8px rgba(0, 170, 255, 0.2);
+    box-shadow: 0 0 15px rgba(0, 170, 255, 0.3);
+    outline: none;
+}
+
+/* Metric styling */
+.metric-container {
+    background: linear-gradient(135deg, #262730, #1a1d29);
+    padding: 20px;
+    border-radius: 15px;
+    border: 1px solid #444;
+    margin: 10px 0;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.metric-container:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(0, 170, 255, 0.1);
+    border-color: #00aaff;
+}
+
+/* Tab styling */
+.stTabs [data-baseweb="tab-list"] {
+    background: linear-gradient(135deg, #262730, #1a1d29);
+    border-radius: 12px;
+    padding: 5px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background: transparent;
+    border-radius: 8px;
+    color: #cccccc;
+    transition: all 0.3s ease;
+}
+
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, #00aaff, #0088cc);
+    color: white;
+}
+
+/* Progress bar styling */
+.stProgress > div > div {
+    background: linear-gradient(90deg, #00aaff, #0088cc);
+    border-radius: 10px;
+}
+
+.stProgress > div {
+    background-color: #333;
+    border-radius: 10px;
 }
 
 /* Professional header styling */
@@ -417,8 +632,8 @@ def display_file_metadata(file_data, filename, hashes):
         </div>
         """, unsafe_allow_html=True)
         
-        st.text_area("MD5", hashes['md5'], height=50)
-        st.text_area("SHA1", hashes['sha1'], height=50)
+        st.text_area("MD5", hashes['md5'], height=68)
+        st.text_area("SHA1", hashes['sha1'], height=68)
     
     with col3:
         st.markdown("""
@@ -873,16 +1088,30 @@ def main():
     
     # Main content area
     if scan_mode == "🔍 Local File Scan":
-        st.subheader("🔍 Local File Analysis")
         st.markdown("""
-        <div class="info-box">
-        <p><strong>Local Scan Features:</strong></p>
-        <ul>
-        <li>🧬 Entropy analysis and pattern detection</li>
-        <li>🔍 String extraction and IOC identification</li>
-        <li>📊 Threat scoring and risk assessment</li>
-        <li>⚡ Offline analysis - no external dependencies</li>
-        </ul>
+        <div class="scan-card">
+            <h2>🔍 Local File Analysis</h2>
+            <p style="font-size: 1.1em; color: #cccccc; margin-bottom: 20px;">
+                Advanced offline malware detection using entropy analysis, pattern recognition, and threat intelligence
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                <div style="background: rgba(0, 170, 255, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #00aaff;">
+                    <strong>🧬 Entropy Analysis</strong><br>
+                    <small>Detect encryption and packing</small>
+                </div>
+                <div style="background: rgba(0, 170, 255, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #00aaff;">
+                    <strong>🔍 Pattern Detection</strong><br>
+                    <small>Identify malicious indicators</small>
+                </div>
+                <div style="background: rgba(0, 170, 255, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #00aaff;">
+                    <strong>📊 Threat Scoring</strong><br>
+                    <small>AI-powered risk assessment</small>
+                </div>
+                <div style="background: rgba(0, 170, 255, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #00aaff;">
+                    <strong>⚡ Offline Analysis</strong><br>
+                    <small>No external dependencies</small>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -906,23 +1135,49 @@ def main():
                 st.metric("🏷️ Type", filename.split('.')[-1].upper() if '.' in filename else "Unknown")
             
             if st.button("🚀 Start Local Analysis", use_container_width=True):
-                results = perform_local_scan(file_data, filename)
-                if results:
-                    st.session_state.analysis_results = results
-                    st.session_state.scan_history.append(results)
-                    st.rerun()
+                # Show scanning animation
+                with st.spinner(""):
+                    animation_data = get_lottie_animation("scanning")
+                    display_lottie(animation_data, "local_scan_animation")
+                    
+                    # Perform scan
+                    results = perform_local_scan(file_data, filename)
+                    if results:
+                        st.session_state.analysis_results = results
+                        st.session_state.scan_history.append(results)
+                        
+                        # Show success animation
+                        threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
+                        show_result_animation(threat_level)
+                        
+                        time.sleep(1)  # Brief pause to show result
+                        st.rerun()
     
     elif scan_mode == "🌐 VirusTotal Scan":
-        st.subheader("🌐 VirusTotal Integration")
         st.markdown("""
-        <div class="info-box">
-        <p><strong>VirusTotal Scan Features:</strong></p>
-        <ul>
-        <li>🔍 Multi-engine malware detection (70+ engines)</li>
-        <li>🌐 Cloud-based threat intelligence</li>
-        <li>📊 Comprehensive reputation analysis</li>
-        <li>🔄 Real-time threat database updates</li>
-        </ul>
+        <div class="scan-card">
+            <h2>🌐 VirusTotal Integration</h2>
+            <p style="font-size: 1.1em; color: #cccccc; margin-bottom: 20px;">
+                Cloud-powered threat detection using 70+ antivirus engines and global threat intelligence
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 25px;">
+                <div style="background: rgba(30, 136, 229, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #1e88e5;">
+                    <strong>🔍 Multi-Engine Detection</strong><br>
+                    <small>70+ antivirus engines</small>
+                </div>
+                <div style="background: rgba(30, 136, 229, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #1e88e5;">
+                    <strong>🌐 Global Intelligence</strong><br>
+                    <small>Real-time threat database</small>
+                </div>
+                <div style="background: rgba(30, 136, 229, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #1e88e5;">
+                    <strong>📊 Reputation Analysis</strong><br>
+                    <small>Comprehensive file scoring</small>
+                </div>
+                <div style="background: rgba(30, 136, 229, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #1e88e5;">
+                    <strong>🔄 Live Updates</strong><br>
+                    <small>Always current detection</small>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1018,8 +1273,8 @@ def main():
     # Footer
     st.markdown("""
     <div class="footer">
-        <p>🛡️ MalwareShield Pro - Professional Threat Detection Platform by vishux777</p>
-        <p>Powered by Streamlit | Enhanced with VirusTotal API</p>
+        <p>🛡️ MalwareShield Pro - Professional Threat Detection Platform</p>
+        <p>Created by vishux777 | Enhanced with VirusTotal API</p>
     </div>
     """, unsafe_allow_html=True)
 
