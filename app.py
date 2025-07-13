@@ -1184,7 +1184,7 @@ def main():
         # Check API key
         if not st.session_state.vt_api_key:
             st.warning("⚠️ Please configure your VirusTotal API key in the sidebar")
-            st.info("You can get a free API key from: https://www.virustotal.com/gui/join-us")
+            st.info("You can get a free API key from: https://www.virustotal.com/gui/join-us or use 726fd4f5cbe22622b7b9f9ffa9feec3237f95462bbf6f22afbc60fa23ede47f6 for trial")
         else:
             # File upload or hash input
             scan_option = st.radio(
