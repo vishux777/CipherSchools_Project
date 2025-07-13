@@ -1,8 +1,8 @@
 """
 MalwareShield Pro - Advanced Malware Detection Tool
 
-A comprehensive malware detection application with VirusTotal integration,
-entropy analysis, pattern detection, and professional reporting capabilities. Use VirusTotal scan for better results.
+A comprehensive Streamlit-based malware detection application with VirusTotal integration,
+entropy analysis, pattern detection, and professional reporting capabilities.
 """
 
 import streamlit as st
