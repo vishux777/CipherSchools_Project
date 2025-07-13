@@ -1274,7 +1274,7 @@ def main():
     st.markdown("""
     <div class="footer">
         <p>🛡️ MalwareShield Pro - Professional Threat Detection Platform</p>
-        <p>Created with 💗 by vishux777 | Enhanced with VirusTotal API</p>
+        <p>Created by vishux777 | Enhanced with VirusTotal API</p>
     </div>
     """, unsafe_allow_html=True)
 
