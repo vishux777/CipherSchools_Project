@@ -1074,7 +1074,7 @@ def main():
             if api_key:
                 st.success("✅ API Key configured")
             else:
-                st.warning("⚠️ API Key required for VirusTotal scans. You can use - "726fd4f5cbe22622b7b9f9ffa9feec3237f95462bbf6f22afbc60fa23ede47f6" as temporary API.")
+                st.warning("⚠️ API Key required for VirusTotal scans .")
         
         st.markdown("---")
         
