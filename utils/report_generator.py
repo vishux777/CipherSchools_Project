@@ -520,22 +520,3 @@ Built with 🛡️ by [Vishwas]
                     'format': 'json'
                 }
             }, indent=2)
-# Add this at the bottom of your existing ReportGenerator class file
-
-def save_report_to_file(analysis_results, output_path="report.pdf"):
-    """
-    Utility function to generate a PDF report and save it to disk correctly.
-
-    Args:
-        analysis_results (dict): Your full malware scan results.
-        output_path (str): Where to save the PDF.
-    """
-    generator = ReportGenerator()
-    pdf_data = generator.generate_report(analysis_results)
-
-    if isinstance(pdf_data, bytes) and pdf_data[:4] == b'%PDF':
-        with open(output_path, "wb") as f:
-            f.write(pdf_data)
-        print(f"[✔] PDF saved successfully to: {output_path}")
-    else:
-        print("[✖] Failed to generate a valid PDF report.")
