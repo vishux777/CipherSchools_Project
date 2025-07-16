@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>MalwareShield Pro Analysis Report</title>
+</head>
+<body>
+    <div class="header">
+        <h1>🛡️ MalwareShield Pro</h1>
+        <h2>Advanced Malware Analysis Report</h2>
+        <div class="timestamp">Generated: {{ current_time }}</div>
+    </div>
+    
+    <div class="section">
+        <h3>📄 File Information</h3>
+        <table>
+            <tr><td><strong>Filename:</strong></td><td>{{ results.filename }}</td></tr>
+            <tr><td><strong>File Size:</strong></td><td>{{ "{:,}".format(results.file_size) }} bytes</td></tr>
+            <tr><td><strong>File Type:</strong></td><td>{{ results.file_type }}</td></tr>
+            <tr><td><strong>Analysis Time:</strong></td><td>{{ results.analysis_time[:19] }}</td></tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h3>🔍 Hash Analysis</h3>
+        <table>
+            {% if results.hashes %}
+                <tr><td><strong>MD5:</strong></td><td class="hash">{{ results.hashes.get('md5', 'Not calculated') }}</td></tr>
+                <tr><td><strong>SHA1:</strong></td><td class="hash">{{ results.hashes.get('sha1', 'Not calculated') }}</td></tr>
+                <tr><td><strong>SHA256:</strong></td><td class="hash">{{ results.hashes.get('sha256', 'Not calculated') }}</td></tr>
+            {% else %}
+                <tr><td colspan="2">Hash calculation failed or not available.</td></tr>
+            {% endif %}
+        </table>
+    </div>
+    
+    <div class="section">
+        <h3>⚠️ Threat Assessment</h3>
+        {% if results.threat_assessment %}
+            {% set threat_data = results.threat_assessment %}
+            <div class="threat-level" style="background-color: {{ threat_color }}; color: white; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                <strong>Threat Level: {{ threat_data.get('level', 'UNKNOWN') }} ({{ threat_data.get('score', 0) }}/100)</strong><br>
+                <strong>Confidence: {{ "%.1f"|format(threat_data.get('confidence', 0)) }}%</strong>
+            </div>
+            
+            {% if threat_data.get('reasoning') %}
+                <h4>Assessment Reasoning:</h4>
+                <ul>
+                    {% for reason in threat_data.reasoning[:5] %}
+                        <li>{{ reason }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endif %}
+    </div>
+    
+    <div class="section">
+        <h3>🔧 Technical Details</h3>
+        <table>
+            <tr><td><strong>Entropy:</strong></td><td>{{ "%.3f"|format(results.entropy) }}</td></tr>
+            <tr><td><strong>Extracted Strings:</strong></td><td>{{ results.strings|length }}</td></tr>
+            <tr><td><strong>Suspicious Indicators:</strong></td><td>{{ results.suspicious_indicators|length }}</td></tr>
+        </table>
+    </div>
+    
+    {% if results.suspicious_indicators %}
+    <div class="section">
+        <h3>🚨 Suspicious Indicators</h3>
+        <ul>
+            {% for indicator in results.suspicious_indicators[:10] %}
+                <li>{{ indicator }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    {% if results.virustotal and results.virustotal.get('available') %}
+    <div class="section">
+        <h3>🦠 VirusTotal Results</h3>
+        <p><strong>Detection Rate:</strong> {{ results.virustotal.get('detections', 0) }}/{{ results.virustotal.get('total_engines', 0) }} engines</p>
+        
+        {% if results.virustotal.get('detections', 0) > 0 %}
+            <h4>Detected by:</h4>
+            <ul>
+                {% for engine in results.virustotal.get('detected_engines', [])[:5] %}
+                    <li>{{ engine }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <div class="section">
+        <h3>💡 Recommendations</h3>
+        <ul>
+            {% for rec in recommendations %}
+                <li>{{ rec }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    
+    <div class="footer">
+        <p>Built with 🛡️ by [Vishwas] - MalwareShield Pro</p>
+    </div>
+</body>
+</html>
