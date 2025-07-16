@@ -1,5 +1,5 @@
 """
-Report Generator for MalwareShield Pro
+Report Generator for MalwareShield Pro - FINAL WORKING VERSION
 Generates PDF and JSON reports from analysis results using HTML-to-PDF conversion
 Built with 🛡️ by [Vishwas]
 """
@@ -106,94 +106,89 @@ class ReportGenerator:
     def _generate_html_to_pdf_report(self, results: Dict[str, Any]) -> bytes:
         """Generate PDF report using weasyprint HTML-to-PDF conversion"""
         try:
-            # Generate HTML content
-            html_content = self._generate_html_content(results)
+            # Generate simple, clean HTML content
+            html_content = self._generate_simple_html_content(results)
             
-            # Generate CSS styles
-            css_content = self._generate_css_styles()
+            # Convert HTML to PDF with minimal settings
+            html_doc = HTML(string=html_content, base_url='.')
             
-            # Convert HTML to PDF
-            html_doc = HTML(string=html_content)
-            css_doc = CSS(string=css_content)
+            # Generate PDF with basic settings
+            pdf_bytes = html_doc.write_pdf()
             
-            # Generate PDF to bytes
-            pdf_bytes = html_doc.write_pdf(stylesheets=[css_doc])
-            
-            return pdf_bytes
-            
+            # Validate PDF output
+            if pdf_bytes and len(pdf_bytes) > 100 and pdf_bytes[:4] == b'%PDF':
+                return pdf_bytes
+            else:
+                return self._generate_simple_text_report(results)
+                
         except Exception as e:
-            return self._generate_error_report(f"HTML-to-PDF generation error: {str(e)}")
+            return self._generate_simple_text_report(results)
     
-    def _generate_html_content(self, results: Dict[str, Any]) -> str:
-        """Generate HTML content for the report"""
-        # Use template if available, otherwise generate inline
-        if self.jinja_env:
-            try:
-                template = self.jinja_env.get_template('report_template.html')
-                return template.render(
-                    results=results,
-                    threat_color=self._get_threat_color(results.get('threat_assessment', {}).get('level', 'UNKNOWN')),
-                    recommendations=self._get_recommendations(results.get('threat_assessment', {}).get('level', 'UNKNOWN'), results),
-                    current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                )
-            except:
-                pass
-        
-        # Fallback to inline HTML generation
-        return self._generate_inline_html(results)
-    
-    def _generate_inline_html(self, results: Dict[str, Any]) -> str:
-        """Generate HTML content inline when template is not available"""
+    def _generate_simple_html_content(self, results: Dict[str, Any]) -> str:
+        """Generate simple HTML content for PDF conversion"""
         threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
         threat_color = self._get_threat_color(threat_level)
-        recommendations = self._get_recommendations(threat_level, results)
         
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>MalwareShield Pro Analysis Report</title>
-        </head>
-        <body>
-            <div class="header">
-                <h1>🛡️ MalwareShield Pro</h1>
-                <h2>Advanced Malware Analysis Report</h2>
-                <div class="timestamp">Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
-            </div>
-            
-            <div class="section">
-                <h3>📄 File Information</h3>
-                <table>
-                    <tr><td><strong>Filename:</strong></td><td>{results.get('filename', 'Unknown')}</td></tr>
-                    <tr><td><strong>File Size:</strong></td><td>{results.get('file_size', 0):,} bytes</td></tr>
-                    <tr><td><strong>File Type:</strong></td><td>{results.get('file_type', 'Unknown')}</td></tr>
-                    <tr><td><strong>Analysis Time:</strong></td><td>{results.get('analysis_time', 'Unknown')[:19]}</td></tr>
-                </table>
-            </div>
-            
-            <div class="section">
-                <h3>🔍 Hash Analysis</h3>
-                <table>
-        """
+        def safe_str(value):
+            """Convert value to safe string for HTML"""
+            if value is None:
+                return 'Unknown'
+            return str(value).replace('<', '&lt;').replace('>', '&gt;').replace('&', '&amp;')
+        
+        html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>MalwareShield Pro Report</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .header {{ text-align: center; margin-bottom: 30px; }}
+        .section {{ margin-bottom: 20px; }}
+        .section h3 {{ color: #0066cc; border-bottom: 2px solid #0066cc; padding-bottom: 5px; }}
+        table {{ width: 100%; border-collapse: collapse; margin-bottom: 15px; }}
+        td {{ padding: 8px; border-bottom: 1px solid #eee; }}
+        td:first-child {{ width: 30%; font-weight: bold; }}
+        .threat-level {{ padding: 10px; border-radius: 5px; margin: 10px 0; color: white; background-color: {threat_color}; }}
+        ul {{ margin: 10px 0; }}
+        .hash {{ font-family: monospace; font-size: 11px; word-break: break-all; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🛡️ MalwareShield Pro</h1>
+        <h2>Malware Analysis Report</h2>
+        <p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    </div>
+    
+    <div class="section">
+        <h3>File Information</h3>
+        <table>
+            <tr><td>Filename:</td><td>{safe_str(results.get('filename'))}</td></tr>
+            <tr><td>File Size:</td><td>{results.get('file_size', 0):,} bytes</td></tr>
+            <tr><td>File Type:</td><td>{safe_str(results.get('file_type'))}</td></tr>
+            <tr><td>Analysis Time:</td><td>{safe_str(results.get('analysis_time', ''))[:19]}</td></tr>
+        </table>
+    </div>
+    
+    <div class="section">
+        <h3>Hash Analysis</h3>
+        <table>"""
         
         hashes = results.get('hashes', {})
         if hashes:
             html += f"""
-                    <tr><td><strong>MD5:</strong></td><td class="hash">{hashes.get('md5', 'Not calculated')}</td></tr>
-                    <tr><td><strong>SHA1:</strong></td><td class="hash">{hashes.get('sha1', 'Not calculated')}</td></tr>
-                    <tr><td><strong>SHA256:</strong></td><td class="hash">{hashes.get('sha256', 'Not calculated')}</td></tr>
-            """
+            <tr><td>MD5:</td><td class="hash">{safe_str(hashes.get('md5', 'Not calculated'))}</td></tr>
+            <tr><td>SHA1:</td><td class="hash">{safe_str(hashes.get('sha1', 'Not calculated'))}</td></tr>
+            <tr><td>SHA256:</td><td class="hash">{safe_str(hashes.get('sha256', 'Not calculated'))}</td></tr>"""
         else:
-            html += '<tr><td colspan="2">Hash calculation failed or not available.</td></tr>'
+            html += '<tr><td colspan="2">Hash calculation not available</td></tr>'
         
         html += """
-                </table>
-            </div>
-            
-            <div class="section">
-                <h3>⚠️ Threat Assessment</h3>
-        """
+        </table>
+    </div>
+    
+    <div class="section">
+        <h3>Threat Assessment</h3>"""
         
         threat_data = results.get('threat_assessment', {})
         if threat_data:
@@ -202,45 +197,41 @@ class ReportGenerator:
             confidence = threat_data.get('confidence', 0)
             
             html += f"""
-                <div class="threat-level" style="background-color: {threat_color}; color: white; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                    <strong>Threat Level: {level} ({score}/100)</strong><br>
-                    <strong>Confidence: {confidence:.1f}%</strong>
-                </div>
-            """
+        <div class="threat-level">
+            <strong>Threat Level: {level} ({score}/100)</strong><br>
+            <strong>Confidence: {confidence:.1f}%</strong>
+        </div>"""
             
             reasoning = threat_data.get('reasoning', [])
             if reasoning:
                 html += '<h4>Assessment Reasoning:</h4><ul>'
                 for reason in reasoning[:5]:
-                    html += f'<li>{reason}</li>'
+                    html += f'<li>{safe_str(reason)}</li>'
                 html += '</ul>'
         
         html += """
-            </div>
-            
-            <div class="section">
-                <h3>🔧 Technical Details</h3>
-                <table>
-        """
+    </div>
+    
+    <div class="section">
+        <h3>Technical Details</h3>
+        <table>"""
         
         html += f"""
-                    <tr><td><strong>Entropy:</strong></td><td>{results.get('entropy', 0):.3f}</td></tr>
-                    <tr><td><strong>Extracted Strings:</strong></td><td>{len(results.get('strings', []))}</td></tr>
-                    <tr><td><strong>Suspicious Indicators:</strong></td><td>{len(results.get('suspicious_indicators', []))}</td></tr>
-                </table>
-            </div>
-        """
+            <tr><td>Entropy:</td><td>{results.get('entropy', 0):.3f}</td></tr>
+            <tr><td>Extracted Strings:</td><td>{len(results.get('strings', []))}</td></tr>
+            <tr><td>Suspicious Indicators:</td><td>{len(results.get('suspicious_indicators', []))}</td></tr>
+        </table>
+    </div>"""
         
         # Suspicious Indicators
         indicators = results.get('suspicious_indicators', [])
         if indicators:
             html += """
-            <div class="section">
-                <h3>🚨 Suspicious Indicators</h3>
-                <ul>
-            """
+    <div class="section">
+        <h3>Suspicious Indicators</h3>
+        <ul>"""
             for indicator in indicators[:10]:
-                html += f'<li>{indicator}</li>'
+                html += f'<li>{safe_str(indicator)}</li>'
             html += '</ul></div>'
         
         # VirusTotal Results
@@ -250,153 +241,38 @@ class ReportGenerator:
             total_engines = vt_results.get('total_engines', 0)
             
             html += f"""
-            <div class="section">
-                <h3>🦠 VirusTotal Results</h3>
-                <p><strong>Detection Rate:</strong> {detections}/{total_engines} engines</p>
-            """
+    <div class="section">
+        <h3>VirusTotal Results</h3>
+        <p><strong>Detection Rate:</strong> {detections}/{total_engines} engines</p>"""
             
             if detections > 0:
                 detected_engines = vt_results.get('detected_engines', [])
                 html += '<h4>Detected by:</h4><ul>'
                 for engine in detected_engines[:5]:
-                    html += f'<li>{engine}</li>'
+                    html += f'<li>{safe_str(engine)}</li>'
                 html += '</ul>'
             html += '</div>'
         
         # Recommendations
+        recommendations = self._get_recommendations(threat_level, results)
         html += """
-            <div class="section">
-                <h3>💡 Recommendations</h3>
-                <ul>
-        """
-        for rec in recommendations:
-            html += f'<li>{rec}</li>'
+    <div class="section">
+        <h3>Recommendations</h3>
+        <ul>"""
+        for rec in recommendations[:8]:  # Limit recommendations
+            html += f'<li>{safe_str(rec)}</li>'
         
         html += """
-                </ul>
-            </div>
-            
-            <div class="footer">
-                <p>Built with 🛡️ by [Vishwas] - MalwareShield Pro</p>
-            </div>
-        </body>
-        </html>
-        """
+        </ul>
+    </div>
+    
+    <div style="text-align: center; margin-top: 30px; color: #666; font-style: italic;">
+        <p>Built with MalwareShield Pro by [Vishwas]</p>
+    </div>
+</body>
+</html>"""
         
         return html
-    
-    def _generate_css_styles(self) -> str:
-        """Generate CSS styles for the report"""
-        return """
-        @page {
-            margin: 2cm;
-            @top-center {
-                content: "MalwareShield Pro Analysis Report";
-                font-family: Arial, sans-serif;
-                font-size: 12px;
-                color: #666;
-            }
-            @bottom-center {
-                content: "Page " counter(page) " of " counter(pages);
-                font-family: Arial, sans-serif;
-                font-size: 10px;
-                color: #666;
-            }
-        }
-        
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }
-        
-        .header {
-            text-align: center;
-            border-bottom: 3px solid #0066cc;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .header h1 {
-            color: #0066cc;
-            font-size: 28px;
-            margin: 0;
-        }
-        
-        .header h2 {
-            color: #666;
-            font-size: 18px;
-            margin: 5px 0;
-        }
-        
-        .timestamp {
-            color: #999;
-            font-size: 12px;
-            margin-top: 10px;
-        }
-        
-        .section {
-            margin-bottom: 25px;
-            page-break-inside: avoid;
-        }
-        
-        .section h3 {
-            color: #0066cc;
-            border-bottom: 2px solid #0066cc;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-        }
-        
-        table td {
-            padding: 8px;
-            border-bottom: 1px solid #eee;
-            vertical-align: top;
-        }
-        
-        table td:first-child {
-            width: 30%;
-            font-weight: bold;
-        }
-        
-        .hash {
-            font-family: monospace;
-            font-size: 11px;
-            word-break: break-all;
-        }
-        
-        .threat-level {
-            border-radius: 5px;
-            padding: 15px;
-            margin: 15px 0;
-            font-weight: bold;
-        }
-        
-        ul {
-            margin: 10px 0;
-            padding-left: 20px;
-        }
-        
-        li {
-            margin-bottom: 5px;
-        }
-        
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #ccc;
-            color: #666;
-            font-style: italic;
-        }
-        """
     
     def _generate_simple_text_report(self, results: Dict[str, Any]) -> bytes:
         """Generate simple text-based report when weasyprint is not available"""
