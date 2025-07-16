@@ -12,10 +12,15 @@ import os
 
 try:
     from weasyprint import HTML, CSS
-    from jinja2 import Template, Environment, FileSystemLoader
     WEASYPRINT_AVAILABLE = True
 except ImportError:
     WEASYPRINT_AVAILABLE = False
+
+try:
+    from jinja2 import Template, Environment, FileSystemLoader
+    JINJA2_AVAILABLE = True
+except ImportError:
+    JINJA2_AVAILABLE = False
 
 class ReportGenerator:
     """Professional report generator for malware analysis using HTML-to-PDF conversion"""
@@ -30,11 +35,13 @@ class ReportGenerator:
         }
         
         # Setup Jinja2 environment
-        template_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
-        if os.path.exists(template_dir):
-            self.jinja_env = Environment(loader=FileSystemLoader(template_dir))
-        else:
-            self.jinja_env = None
+        self.jinja_env = None
+        if JINJA2_AVAILABLE:
+            template_dir = os.path.join(os.path.dirname(__file__), '..', 'templates')
+            if os.path.exists(template_dir):
+                self.jinja_env = Environment(loader=FileSystemLoader(template_dir))
+            else:
+                self.jinja_env = None
     
     def _get_threat_color(self, threat_level: str) -> str:
         """Get color for threat level"""
@@ -597,3 +604,43 @@ Built with 🛡️ by [Vishwas]
             return str(data)
         else:
             return data
+    
+    def generate_json_report(self, analysis_results: Dict[str, Any]) -> str:
+        """
+        Generate JSON report from analysis results
+        
+        Args:
+            analysis_results: Complete analysis results
+            
+        Returns:
+            JSON report as string
+        """
+        try:
+            # Clean and validate the analysis results
+            cleaned_results = self._clean_analysis_results(analysis_results)
+            
+            # Add report metadata
+            cleaned_results['report_metadata'] = {
+                'generated_at': datetime.now().isoformat(),
+                'generator': 'MalwareShield Pro',
+                'version': '1.0',
+                'format': 'json',
+                'threat_level': cleaned_results.get('threat_assessment', {}).get('level', 'UNKNOWN'),
+                'recommendations': self._get_recommendations(
+                    cleaned_results.get('threat_assessment', {}).get('level', 'UNKNOWN'), 
+                    cleaned_results
+                )
+            }
+            
+            return json.dumps(cleaned_results, indent=2, ensure_ascii=False)
+            
+        except Exception as e:
+            return json.dumps({
+                'error': f'JSON report generation failed: {str(e)}',
+                'report_metadata': {
+                    'generated_at': datetime.now().isoformat(),
+                    'generator': 'MalwareShield Pro',
+                    'version': '1.0',
+                    'format': 'json'
+                }
+            }, indent=2)
