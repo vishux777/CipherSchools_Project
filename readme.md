@@ -1,146 +1,79 @@
-# MalwareShield Pro - Malware Detection Tool
+# 🛡️ MalwareShield Pro
 
-## Overview
+**Deployed at:** 🔗 [https://malwareshieldpro.streamlit.app/](https://malwareshieldpro.streamlit.app/)
 
-MalwareShield Pro is a comprehensive mobile-compatible malware detection application built with Streamlit. It provides real-time file analysis, VirusTotal integration, entropy analysis, pattern detection, and professional reporting capabilities. The application is designed to be both powerful and user-friendly, with a focus on mobile responsiveness and professional presentation.
+---
 
-## User Preferences
+## 📌 About
 
-Preferred communication style: Simple, everyday language.
+**MalwareShield Pro** is a cybersecurity project developed by **[vishux777](https://github.com/vishux777)** as part of the CipherSchools Cybersecurity course.
+It is a **Streamlit-powered malware analysis and reporting tool** that scans uploaded files, optionally integrates with **VirusTotal**, and generates reports in both PDF and JSON formats.
 
-## System Architecture
+---
 
-### Frontend Architecture
-- **Framework**: Streamlit-based web application
-- **UI Components**: Custom CSS animations, Plotly visualizations, responsive design
-- **Mobile Support**: Mobile-optimized responsive layouts and touch-friendly interfaces
-- **Animations**: Lottie animations with CSS fallbacks for enhanced user experience
+## 🚀 Features
 
-### Backend Architecture
-- **Main Application**: Flask-like Streamlit app (`app.py`) serving as the primary interface
-- **Modular Design**: Utility modules organized in `utils/` directory for specific functionality
-- **Analysis Pipeline**: Multi-stage analysis engine with threat scoring and reporting
+* 🧪 **Local and VirusTotal Malware Scanning**
+* 📄 **Detailed PDF + JSON Report Generation**
+* 🎴 **Card-based UI** for clean, modern interaction (Desktop & Mobile friendly)
+* ⏱️ **Fast & Efficient** Scanning Pipeline
+* 🧰 Built using **Streamlit**, **Python**, **WeasyPrint**, and optional **VirusTotal API**
 
-### Data Processing
-- **File Analysis**: Byte-level analysis with entropy calculation, signature detection, and pattern matching
-- **Threat Scoring**: Weighted scoring system combining multiple analysis factors
-- **Report Generation**: PDF and JSON report generation with professional formatting
+---
 
-## Key Components
+## 📦 Tech Stack
 
-### 1. Analysis Engine (`utils/analysis_engine.py`)
-- **Purpose**: Core malware detection logic
-- **Features**: 
-  - Entropy analysis for detecting packed/encrypted content
-  - File signature detection for format identification
-  - Suspicious keyword and pattern detection
-  - Configurable analysis parameters
+* **Frontend:** Streamlit
+* **Backend:** Python
+* **PDF Generation:** WeasyPrint
+* **API Integration:** VirusTotal (optional)
+* **UI/UX:** Responsive card layout using Streamlit's component system
 
-### 2. VirusTotal Integration (`utils/virustotal.py`)
-- **Purpose**: External threat intelligence via VirusTotal API
-- **Features**:
-  - File hash submission and scanning
-  - Report retrieval with caching
-  - Rate limiting and error handling
-  - Fallback graceful degradation
+---
 
-### 3. Threat Scoring Engine (`utils/threat_scorer.py`)
-- **Purpose**: Quantitative threat assessment
-- **Features**:
-  - Weighted multi-factor scoring algorithm
-  - Threat level classification (CLEAN, LOW, MEDIUM, HIGH, CRITICAL)
-  - Detailed reasoning for score calculations
-  - Configurable scoring weights
+## 🔧 Setup Instructions
 
-### 4. Report Generator (`utils/report_generator.py`)
-- **Purpose**: Professional report generation
-- **Features**:
-  - PDF reports with custom styling using ReportLab
-  - JSON export for programmatic access
-  - Professional formatting with charts and tables
-  - Executive summary generation
+1. Clone this repository:
 
-### 5. Animation System (`lottie_animations.py`)
-- **Purpose**: Enhanced user experience during scanning
-- **Features**:
-  - Lottie animation support with CSS fallbacks
-  - Mobile-optimized animations
-  - Multiple animation states (scanning, success, error)
-  - Graceful degradation when animations unavailable
+   ```bash
+   git clone https://github.com/vishux777/CipherSchools_Project.git
+   cd CipherSchools_Project
+   ```
 
-## Data Flow
+2. Install dependencies:
 
-1. **File Upload**: User uploads file through Streamlit interface
-2. **Initial Processing**: File is read into memory and basic metadata extracted
-3. **Analysis Pipeline**:
-   - Entropy calculation and statistical analysis
-   - Pattern matching against known malware signatures
-   - File format detection and validation
-   - Suspicious indicator extraction
-4. **External Scanning**: VirusTotal API integration for additional threat intelligence
-5. **Threat Assessment**: Multi-factor scoring algorithm produces threat level
-6. **Report Generation**: Results compiled into professional PDF/JSON reports
-7. **Presentation**: Results displayed with interactive visualizations
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## External Dependencies
+3. (Optional) Add your VirusTotal API key in the code:
 
-### Core Libraries
-- **Streamlit**: Web application framework
-- **Plotly**: Interactive data visualization
-- **Pandas**: Data manipulation and analysis
-- **ReportLab**: PDF generation
+   ```python
+   VIRUSTOTAL_API_KEY = "your_api_key_here"
+   ```
 
-### Optional Integrations
-- **VirusTotal API**: External threat intelligence (requires API key)
-- **Lottie**: Animation support (with fallback)
+4. Run the app:
 
-### Security Considerations
-- File processing in memory to avoid disk storage
-- API key management for external services
-- Input validation and sanitization
-- Rate limiting for external API calls
+   ```bash
+   streamlit run main.py
+   ```
 
-## Deployment Strategy
+---
 
-### Development Environment
-- **Platform**: Replit-compatible Python environment
-- **Dependencies**: All dependencies managed through standard Python packaging
-- **Configuration**: Environment variables for API keys and settings
+## 🐞 Known Issues
 
-### Production Considerations
-- **Scalability**: Stateless design allows horizontal scaling
-- **Security**: No persistent file storage, memory-only processing
-- **Performance**: Efficient algorithms with configurable timeouts
-- **Monitoring**: Built-in error handling and logging
+* VirusTotal scans may take time or rate-limit with free keys.
+* PDF report generation may occasionally fail on some systems; ensure WeasyPrint is correctly installed.
+* UI optimizations are ongoing for better mobile performance.
 
-### Mobile Optimization
-- **Responsive Design**: CSS media queries for mobile devices
-- **Touch Interface**: Touch-friendly buttons and interactions
-- **Performance**: Optimized for mobile network conditions
-- **Progressive Enhancement**: Core functionality works without JavaScript
+---
 
-## Architecture Decisions
+## 📜 License
 
-### Choice of Streamlit
-- **Problem**: Need for rapid development of interactive web application
-- **Solution**: Streamlit for Python-native web development
-- **Rationale**: Allows focus on analysis logic rather than web development complexity
-- **Trade-offs**: Less flexibility than traditional web frameworks, but much faster development
+This project is open-source under the [MIT License](LICENSE).
 
-### Modular Utility Structure
-- **Problem**: Maintain clean, testable, and maintainable code
-- **Solution**: Separate utility modules for different concerns
-- **Rationale**: Enables independent testing and development of components
-- **Benefits**: Code reusability, easier debugging, clear separation of concerns
+---
 
-### Multi-Factor Threat Scoring
-- **Problem**: Single indicators are insufficient for accurate threat assessment
-- **Solution**: Weighted scoring system combining multiple analysis factors
-- **Rationale**: More accurate threat detection through ensemble approach
-- **Implementation**: Configurable weights allow tuning for different use cases
+## ✍️ Author
 
-### Graceful Degradation Strategy
-- **Problem**: External dependencies (VirusTotal, Lottie) may be unavailable
-- **Solution**: Fallback implementations and error handling
-- **Rationale**: Ensures core functionality remains available even with partial failures
-- **Benefits**: Improved reliability and user experience
+Made with 💻 by **[@vishux777](https://github.com/vishux777)** for **CipherSchools Cybersecurity Course**.
