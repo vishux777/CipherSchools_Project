@@ -1,268 +1,255 @@
 """
-VirusTotal API Integration Module
+VirusTotal API Integration for MalwareShield Pro
+Handles file scanning and report retrieval from VirusTotal
 
-Provides comprehensive integration with VirusTotal API for file scanning,
-hash lookups, and threat intelligence gathering.
+Built with 🛡️ by [Vishwas]
 """
 
 import requests
-import time
 import hashlib
-import json
+import time
+import os
 from typing import Dict, Any, Optional
 
 class VirusTotalAPI:
-    """VirusTotal API client for malware scanning and analysis"""
+    """VirusTotal API client for malware scanning"""
     
     def __init__(self, api_key: str):
-        """Initialize VirusTotal API client
-        
-        Args:
-            api_key: VirusTotal API key
-        """
         self.api_key = api_key
-        self.base_url = "https://www.virustotal.com/vtapi/v2"
-        self.session = requests.Session()
-        self.session.headers.update({
-            'apikey': self.api_key,
-            'User-Agent': 'MalwareShield-Pro/1.0'
-        })
+        self.base_url = "https://www.virustotal.com/api/v3"
+        self.headers = {
+            "x-apikey": self.api_key,
+            "Content-Type": "application/json"
+        }
+        self.timeout = 30
     
     def is_configured(self) -> bool:
-        """Check if API is properly configured
-        
-        Returns:
-            bool: True if API key is valid and configured
-        """
-        if not self.api_key:
-            return False
-        
-        try:
-            # Test API key with a simple request
-            response = self.session.get(
-                f"{self.base_url}/file/report",
-                params={'resource': 'test', 'apikey': self.api_key},
-                timeout=10
-            )
-            return response.status_code != 403
-        except Exception:
-            return False
+        """Check if API key is configured"""
+        return bool(self.api_key and self.api_key.strip())
     
     def scan_file(self, file_data: bytes, filename: str) -> Dict[str, Any]:
-        """Scan file with VirusTotal
+        """
+        Scan file with VirusTotal
         
         Args:
-            file_data: Binary file data
+            file_data: Raw file bytes
             filename: Original filename
             
         Returns:
-            dict: Scan results from VirusTotal
+            Dict containing scan results
         """
+        if not self.is_configured():
+            return {"error": "VirusTotal API key not configured"}
+        
         try:
-            # Calculate file hash for checking existing reports
+            # Calculate file hash first
             file_hash = hashlib.sha256(file_data).hexdigest()
             
-            # First, check if file was already scanned
+            # Check if file already exists in VT database
             existing_report = self.get_file_report(file_hash)
-            if existing_report and 'scans' in existing_report:
-                existing_report['source'] = 'existing_report'
+            if existing_report and 'error' not in existing_report:
                 return existing_report
             
-            # If no existing report, submit file for scanning
-            files = {'file': (filename, file_data)}
-            response = self.session.post(
-                f"{self.base_url}/file/scan",
+            # File not in database, upload for scanning
+            return self._upload_file(file_data, filename)
+            
+        except Exception as e:
+            return {"error": f"VirusTotal scan failed: {str(e)}"}
+    
+    def get_file_report(self, file_hash: str) -> Dict[str, Any]:
+        """
+        Get existing file report from VirusTotal
+        
+        Args:
+            file_hash: SHA256 hash of the file
+            
+        Returns:
+            Dict containing report data
+        """
+        if not self.is_configured():
+            return {"error": "VirusTotal API key not configured"}
+        
+        try:
+            url = f"{self.base_url}/files/{file_hash}"
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
+            
+            if response.status_code == 200:
+                return self._parse_report(response.json())
+            elif response.status_code == 404:
+                return {"error": "File not found in VirusTotal database"}
+            else:
+                return {"error": f"VirusTotal API error: {response.status_code}"}
+                
+        except requests.exceptions.RequestException as e:
+            return {"error": f"Network error: {str(e)}"}
+        except Exception as e:
+            return {"error": f"VirusTotal report retrieval failed: {str(e)}"}
+    
+    def _upload_file(self, file_data: bytes, filename: str) -> Dict[str, Any]:
+        """Upload file to VirusTotal for scanning"""
+        try:
+            # Check file size limit (32MB for free API)
+            if len(file_data) > 32 * 1024 * 1024:
+                return {"error": "File too large for VirusTotal (max 32MB)"}
+            
+            # Get upload URL
+            url = f"{self.base_url}/files"
+            files = {"file": (filename, file_data)}
+            
+            response = requests.post(
+                url,
                 files=files,
-                timeout=60
+                headers={"x-apikey": self.api_key},
+                timeout=self.timeout
             )
             
             if response.status_code == 200:
-                scan_result = response.json()
+                result = response.json()
+                analysis_id = result.get('data', {}).get('id')
                 
-                if scan_result.get('response_code') == 1:
-                    # Wait for scan completion and retrieve report
-                    resource = scan_result.get('resource')
-                    if resource:
-                        # Wait a bit for processing
-                        time.sleep(15)
-                        return self.get_file_report(resource)
+                if analysis_id:
+                    # Wait for analysis to complete
+                    return self._wait_for_analysis(analysis_id)
                 else:
-                    return {
-                        'error': f"Scan submission failed: {scan_result.get('verbose_msg', 'Unknown error')}"
-                    }
+                    return {"error": "Failed to get analysis ID"}
             else:
-                return {
-                    'error': f"HTTP {response.status_code}: {response.text}"
-                }
+                return {"error": f"Upload failed: {response.status_code}"}
                 
-        except requests.exceptions.RequestException as e:
-            return {'error': f"Network error: {str(e)}"}
         except Exception as e:
-            return {'error': f"Scan error: {str(e)}"}
+            return {"error": f"File upload failed: {str(e)}"}
     
-    def get_file_report(self, resource: str) -> Dict[str, Any]:
-        """Get file analysis report from VirusTotal
-        
-        Args:
-            resource: File hash or scan ID
-            
-        Returns:
-            dict: Analysis report from VirusTotal
-        """
+    def _wait_for_analysis(self, analysis_id: str, max_wait: int = 300) -> Dict[str, Any]:
+        """Wait for analysis to complete"""
         try:
-            response = self.session.get(
-                f"{self.base_url}/file/report",
-                params={
-                    'resource': resource,
-                    'apikey': self.api_key,
-                    'allinfo': 1
-                },
-                timeout=30
-            )
+            url = f"{self.base_url}/analyses/{analysis_id}"
+            start_time = time.time()
             
-            if response.status_code == 200:
-                report = response.json()
+            while time.time() - start_time < max_wait:
+                response = requests.get(url, headers=self.headers, timeout=self.timeout)
                 
-                if report.get('response_code') == 1:
-                    # Process and format the report
-                    return self._format_report(report)
-                elif report.get('response_code') == 0:
-                    return {
-                        'error': 'File not found in VirusTotal database',
-                        'resource': resource
-                    }
-                else:
-                    return {
-                        'error': f"Report retrieval failed: {report.get('verbose_msg', 'Unknown error')}"
-                    }
-            else:
-                return {
-                    'error': f"HTTP {response.status_code}: {response.text}"
-                }
-                
-        except requests.exceptions.RequestException as e:
-            return {'error': f"Network error: {str(e)}"}
-        except Exception as e:
-            return {'error': f"Report retrieval error: {str(e)}"}
-    
-    def _format_report(self, raw_report: Dict[str, Any]) -> Dict[str, Any]:
-        """Format VirusTotal report for consistent output
-        
-        Args:
-            raw_report: Raw report from VirusTotal API
-            
-        Returns:
-            dict: Formatted report
-        """
-        try:
-            scans = raw_report.get('scans', {})
-            
-            # Calculate detection statistics
-            stats = {
-                'total': len(scans),
-                'malicious': 0,
-                'suspicious': 0,
-                'harmless': 0,
-                'undetected': 0
-            }
-            
-            formatted_scans = {}
-            
-            for engine, result in scans.items():
-                detection_result = result.get('result')
-                
-                if detection_result:
-                    if any(malware_type in detection_result.lower() 
-                          for malware_type in ['trojan', 'virus', 'malware', 'backdoor', 'rootkit']):
-                        stats['malicious'] += 1
+                if response.status_code == 200:
+                    data = response.json()
+                    attributes = data.get('data', {}).get('attributes', {})
+                    status = attributes.get('status')
+                    
+                    if status == 'completed':
+                        # Get the file report
+                        stats = attributes.get('stats', {})
+                        file_info = attributes.get('meta', {}).get('file_info', {})
+                        
+                        return {
+                            'scan_date': attributes.get('date'),
+                            'status': status,
+                            'total_scans': sum(stats.values()),
+                            'positive_scans': stats.get('malicious', 0),
+                            'stats': stats,
+                            'file_info': file_info,
+                            'permalink': f"https://www.virustotal.com/gui/file/{file_info.get('sha256', '')}"
+                        }
+                    elif status == 'queued':
+                        time.sleep(5)  # Wait 5 seconds before checking again
                     else:
-                        stats['suspicious'] += 1
+                        return {"error": f"Analysis failed with status: {status}"}
                 else:
-                    stats['harmless'] += 1
-                
-                formatted_scans[engine] = {
-                    'result': detection_result or 'Clean',
-                    'version': result.get('version', 'N/A'),
-                    'update': result.get('update', 'N/A')
-                }
+                    return {"error": f"Analysis check failed: {response.status_code}"}
             
-            stats['undetected'] = stats['total'] - stats['malicious'] - stats['suspicious'] - stats['harmless']
+            return {"error": "Analysis timeout - please check VirusTotal manually"}
+            
+        except Exception as e:
+            return {"error": f"Analysis wait failed: {str(e)}"}
+    
+    def _parse_report(self, report_data: Dict) -> Dict[str, Any]:
+        """Parse VirusTotal report data"""
+        try:
+            data = report_data.get('data', {})
+            attributes = data.get('attributes', {})
+            
+            # Extract scan results
+            last_analysis_stats = attributes.get('last_analysis_stats', {})
+            last_analysis_results = attributes.get('last_analysis_results', {})
+            
+            # File information
+            file_info = {
+                'sha256': attributes.get('sha256'),
+                'sha1': attributes.get('sha1'),
+                'md5': attributes.get('md5'),
+                'file_size': attributes.get('size'),
+                'file_type': attributes.get('type_description'),
+                'magic': attributes.get('magic'),
+                'first_seen': attributes.get('first_submission_date'),
+                'last_seen': attributes.get('last_submission_date')
+            }
+            
+            # Scan statistics
+            total_scans = sum(last_analysis_stats.values())
+            positive_scans = last_analysis_stats.get('malicious', 0)
+            
+            # Engine results
+            engines = []
+            for engine_name, result in last_analysis_results.items():
+                engines.append({
+                    'name': engine_name,
+                    'result': result.get('result'),
+                    'category': result.get('category'),
+                    'version': result.get('version'),
+                    'update': result.get('update')
+                })
             
             return {
-                'scan_id': raw_report.get('scan_id'),
-                'sha256': raw_report.get('sha256'),
-                'md5': raw_report.get('md5'),
-                'sha1': raw_report.get('sha1'),
-                'scan_date': raw_report.get('scan_date'),
-                'permalink': raw_report.get('permalink'),
-                'stats': stats,
-                'scans': formatted_scans,
-                'total_engines': stats['total'],
-                'detection_ratio': f"{stats['malicious'] + stats['suspicious']}/{stats['total']}",
-                'source': 'virustotal_api'
+                'scan_date': attributes.get('last_analysis_date'),
+                'total_scans': total_scans,
+                'positive_scans': positive_scans,
+                'detection_ratio': f"{positive_scans}/{total_scans}",
+                'stats': last_analysis_stats,
+                'file_info': file_info,
+                'engines': engines,
+                'permalink': f"https://www.virustotal.com/gui/file/{file_info['sha256']}"
             }
             
         except Exception as e:
-            return {
-                'error': f"Report formatting error: {str(e)}",
-                'raw_report': raw_report
-            }
+            return {"error": f"Failed to parse VirusTotal report: {str(e)}"}
     
     def get_url_report(self, url: str) -> Dict[str, Any]:
-        """Get URL analysis report from VirusTotal
+        """Get URL analysis report"""
+        if not self.is_configured():
+            return {"error": "VirusTotal API key not configured"}
         
-        Args:
-            url: URL to analyze
-            
-        Returns:
-            dict: URL analysis report
-        """
         try:
-            response = self.session.get(
-                f"{self.base_url}/url/report",
-                params={
-                    'resource': url,
-                    'apikey': self.api_key,
-                    'scan': 1
-                },
-                timeout=30
-            )
+            # Encode URL for API
+            import base64
+            url_id = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
+            
+            api_url = f"{self.base_url}/urls/{url_id}"
+            response = requests.get(api_url, headers=self.headers, timeout=self.timeout)
             
             if response.status_code == 200:
-                return response.json()
+                return self._parse_url_report(response.json())
+            elif response.status_code == 404:
+                return {"error": "URL not found in VirusTotal database"}
             else:
-                return {
-                    'error': f"HTTP {response.status_code}: {response.text}"
-                }
+                return {"error": f"VirusTotal API error: {response.status_code}"}
                 
         except Exception as e:
-            return {'error': f"URL analysis error: {str(e)}"}
+            return {"error": f"URL report retrieval failed: {str(e)}"}
     
-    def get_domain_report(self, domain: str) -> Dict[str, Any]:
-        """Get domain analysis report from VirusTotal
-        
-        Args:
-            domain: Domain to analyze
-            
-        Returns:
-            dict: Domain analysis report
-        """
+    def _parse_url_report(self, report_data: Dict) -> Dict[str, Any]:
+        """Parse URL report data"""
         try:
-            response = self.session.get(
-                f"{self.base_url}/domain/report",
-                params={
-                    'domain': domain,
-                    'apikey': self.api_key
-                },
-                timeout=30
-            )
+            data = report_data.get('data', {})
+            attributes = data.get('attributes', {})
             
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return {
-                    'error': f"HTTP {response.status_code}: {response.text}"
-                }
-                
+            last_analysis_stats = attributes.get('last_analysis_stats', {})
+            
+            return {
+                'url': attributes.get('url'),
+                'scan_date': attributes.get('last_analysis_date'),
+                'total_scans': sum(last_analysis_stats.values()),
+                'positive_scans': last_analysis_stats.get('malicious', 0),
+                'stats': last_analysis_stats,
+                'reputation': attributes.get('reputation', 0),
+                'categories': attributes.get('categories', {}),
+                'permalink': f"https://www.virustotal.com/gui/url/{data.get('id', '')}"
+            }
+            
         except Exception as e:
-            return {'error': f"Domain analysis error: {str(e)}"}
+            return {"error": f"Failed to parse URL report: {str(e)}"}

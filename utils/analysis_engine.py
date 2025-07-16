@@ -1,464 +1,303 @@
 """
-Analysis Engine Module
+Analysis Engine for MalwareShield Pro
+Comprehensive file analysis with entropy, strings, and pattern detection
 
-Provides comprehensive local file analysis capabilities including entropy analysis,
-pattern detection, string extraction, and threat assessment.
+Built with 🛡️ by [Vishwas]
 """
 
 import re
 import math
 import string
-import hashlib
 from collections import Counter
-from typing import Dict, List, Any, Tuple
-
-try:
-    import magic
-    MAGIC_AVAILABLE = True
-except ImportError:
-    MAGIC_AVAILABLE = False
+from typing import Dict, List, Any, Optional
 
 class AnalysisEngine:
-    """Core analysis engine for local file scanning and threat detection"""
+    """Main analysis engine for malware detection"""
     
     def __init__(self):
-        """Initialize the analysis engine"""
-        self.suspicious_patterns = self._load_suspicious_patterns()
-        self.malware_signatures = self._load_malware_signatures()
+        self.suspicious_keywords = [
+            'password', 'keylog', 'backdoor', 'trojan', 'virus', 'malware',
+            'exploit', 'payload', 'shell', 'rootkit', 'botnet', 'cryptocurrency',
+            'bitcoin', 'wallet', 'mining', 'cmd.exe', 'powershell', 'download',
+            'execute', 'inject', 'bypass', 'disable', 'antivirus', 'firewall',
+            'registry', 'process', 'thread', 'memory', 'heap', 'stack',
+            'debug', 'trace', 'hook', 'patch', 'obfuscate', 'encrypt'
+        ]
+        
+        self.file_signatures = {
+            b'\x4D\x5A': 'PE/DOS Executable',
+            b'\x50\x4B\x03\x04': 'ZIP Archive',
+            b'\x50\x4B\x05\x06': 'ZIP Archive (empty)',
+            b'\x50\x4B\x07\x08': 'ZIP Archive (spanned)',
+            b'\x25\x50\x44\x46': 'PDF Document',
+            b'\xD0\xCF\x11\xE0': 'Microsoft Office Document',
+            b'\x89\x50\x4E\x47': 'PNG Image',
+            b'\xFF\xD8\xFF': 'JPEG Image',
+            b'\x47\x49\x46\x38': 'GIF Image',
+            b'\x1F\x8B\x08': 'GZIP Archive',
+            b'\x42\x5A\x68': 'BZIP2 Archive',
+            b'\x37\x7A\xBC\xAF': '7-Zip Archive'
+        }
     
-    def analyze_file(self, file_data: bytes, filename: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
-        """Perform comprehensive file analysis
+    def analyze_file(self, file_data: bytes, filename: str, config: Dict) -> Dict[str, Any]:
+        """
+        Perform comprehensive file analysis
         
         Args:
-            file_data: Binary file data
+            file_data: Raw file bytes
             filename: Original filename
-            config: Analysis configuration options
+            config: Analysis configuration
             
         Returns:
-            dict: Complete analysis results
+            Dict containing analysis results
         """
-        if config is None:
-            config = self._get_default_config()
+        results = {
+            'filename': filename,
+            'file_size': len(file_data),
+            'file_type': self._detect_file_type(file_data),
+            'entropy': self._calculate_entropy(file_data),
+            'strings': [],
+            'patterns': {},
+            'suspicious_indicators': [],
+            'risk_factors': []
+        }
         
         try:
-            results = {
-                'filename': filename,
-                'file_size': len(file_data),
-                'file_type': self._detect_file_type(file_data, filename),
-                'hashes': self._calculate_hashes(file_data),
-                'entropy': self._calculate_entropy(file_data),
-                'strings': self._extract_strings(file_data, config),
-                'patterns': self._detect_patterns(file_data, config),
-                'signatures': self._check_signatures(file_data),
-                'metadata': self._extract_metadata(file_data, filename),
-                'suspicious_indicators': []
-            }
+            # Extract strings if enabled
+            if config.get('string_analysis', True):
+                results['strings'] = self._extract_strings(
+                    file_data, 
+                    config.get('min_string_length', 4),
+                    config.get('max_strings', 1000)
+                )
             
-            # Analyze for suspicious indicators
-            results['suspicious_indicators'] = self._find_suspicious_indicators(results)
+            # Analyze patterns if enabled
+            if config.get('pattern_analysis', True):
+                results['patterns'] = self._analyze_patterns(results['strings'])
             
-            return results
+            # Check for suspicious indicators
+            results['suspicious_indicators'] = self._find_suspicious_indicators(
+                file_data, results['strings']
+            )
+            
+            # Calculate risk factors
+            results['risk_factors'] = self._calculate_risk_factors(results)
             
         except Exception as e:
-            return {
-                'error': f"Analysis failed: {str(e)}",
-                'filename': filename
-            }
-    
-    def _get_default_config(self) -> Dict[str, Any]:
-        """Get default analysis configuration
+            results['error'] = f"Analysis error: {str(e)}"
         
-        Returns:
-            dict: Default configuration
-        """
-        return {
-            'min_string_length': 4,
-            'max_strings': 1000,
-            'deep_scan': True,
-            'pattern_analysis': True,
-            'entropy_threshold': 7.5
-        }
+        return results
     
-    def _detect_file_type(self, file_data: bytes, filename: str) -> str:
-        """Detect file type using multiple methods
+    def _detect_file_type(self, file_data: bytes) -> str:
+        """Detect file type based on magic bytes"""
+        if not file_data:
+            return "Unknown"
         
-        Args:
-            file_data: Binary file data
-            filename: Original filename
-            
-        Returns:
-            str: Detected file type
-        """
-        try:
-            # Try to use python-magic for file type detection
-            if MAGIC_AVAILABLE:
-                try:
-                    mime_type = magic.from_buffer(file_data, mime=True)
-                    return mime_type
-                except Exception:
-                    pass
-            
-            # Fallback to extension-based detection
-            if '.' in filename:
-                extension = filename.split('.')[-1].lower()
-                
-                type_map = {
-                    'exe': 'application/x-executable',
-                    'dll': 'application/x-library',
-                    'pdf': 'application/pdf',
-                    'doc': 'application/msword',
-                    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    'zip': 'application/zip',
-                    'rar': 'application/x-rar',
-                    'txt': 'text/plain',
-                    'py': 'text/x-python',
-                    'js': 'text/javascript',
-                    'html': 'text/html',
-                    'jpg': 'image/jpeg',
-                    'png': 'image/png',
-                    'gif': 'image/gif'
-                }
-                
-                return type_map.get(extension, 'application/octet-stream')
-            
-            # Magic number detection
-            if file_data.startswith(b'MZ'):
-                return 'application/x-executable'
-            elif file_data.startswith(b'%PDF'):
-                return 'application/pdf'
-            elif file_data.startswith(b'PK'):
-                return 'application/zip'
-            elif file_data.startswith(b'\x7fELF'):
-                return 'application/x-executable'
-            
-            return 'application/octet-stream'
-            
-        except Exception:
-            return 'unknown'
+        for signature, file_type in self.file_signatures.items():
+            if file_data.startswith(signature):
+                return file_type
+        
+        return "Unknown"
     
-    def _calculate_hashes(self, file_data: bytes) -> Dict[str, str]:
-        """Calculate multiple hashes for the file
-        
-        Args:
-            file_data: Binary file data
-            
-        Returns:
-            dict: Hash values
-        """
-        return {
-            'md5': hashlib.md5(file_data).hexdigest(),
-            'sha1': hashlib.sha1(file_data).hexdigest(),
-            'sha256': hashlib.sha256(file_data).hexdigest(),
-            'sha512': hashlib.sha512(file_data).hexdigest()
-        }
-    
-    def _calculate_entropy(self, data: bytes) -> float:
-        """Calculate Shannon entropy of data
-        
-        Args:
-            data: Binary data
-            
-        Returns:
-            float: Entropy value
-        """
-        if not data:
+    def _calculate_entropy(self, file_data: bytes) -> float:
+        """Calculate Shannon entropy of file data"""
+        if not file_data:
             return 0.0
         
-        # Count frequency of each byte
-        frequency = Counter(data)
-        data_len = len(data)
-        
-        # Calculate entropy
-        entropy = 0.0
-        for count in frequency.values():
-            p = count / data_len
-            if p > 0:
-                entropy -= p * math.log2(p)
-        
-        return entropy
-    
-    def _extract_strings(self, file_data: bytes, config: Dict[str, Any]) -> List[str]:
-        """Extract printable strings from file data
-        
-        Args:
-            file_data: Binary file data
-            config: Analysis configuration
-            
-        Returns:
-            list: Extracted strings
-        """
-        min_length = config.get('min_string_length', 4)
-        max_strings = config.get('max_strings', 1000)
-        
-        strings = []
-        current_string = ""
-        
-        for byte in file_data:
-            if byte < 128:  # ASCII range
-                char = chr(byte)
-                if char in string.printable and char not in '\t\n\r\x0b\x0c':
-                    current_string += char
-                else:
-                    if len(current_string) >= min_length:
-                        strings.append(current_string)
-                        if len(strings) >= max_strings:
-                            break
-                    current_string = ""
-            else:
-                if len(current_string) >= min_length:
-                    strings.append(current_string)
-                    if len(strings) >= max_strings:
-                        break
-                current_string = ""
-        
-        # Add final string if valid
-        if len(current_string) >= min_length and len(strings) < max_strings:
-            strings.append(current_string)
-        
-        return strings
-    
-    def _detect_patterns(self, file_data: bytes, config: Dict[str, Any]) -> Dict[str, List[str]]:
-        """Detect suspicious patterns in file data
-        
-        Args:
-            file_data: Binary file data
-            config: Analysis configuration
-            
-        Returns:
-            dict: Detected patterns by category
-        """
-        if not config.get('pattern_analysis', True):
-            return {}
-        
-        # Convert to string for pattern matching
         try:
-            file_string = file_data.decode('utf-8', errors='ignore')
-        except UnicodeDecodeError:
-            file_string = str(file_data)
-        
-        detected_patterns = {}
-        
-        for category, patterns in self.suspicious_patterns.items():
-            matches = []
-            for pattern_name, pattern in patterns.items():
-                found = pattern.findall(file_string)
-                if found:
-                    matches.extend(found)
+            # Count byte frequencies
+            byte_counts = Counter(file_data)
+            total_bytes = len(file_data)
             
-            if matches:
-                # Remove duplicates and limit results
-                detected_patterns[category] = list(set(matches))[:50]
-        
-        return detected_patterns
+            # Calculate entropy
+            entropy = 0.0
+            for count in byte_counts.values():
+                probability = count / total_bytes
+                entropy -= probability * math.log2(probability)
+            
+            return round(entropy, 3)
+        except:
+            return 0.0
     
-    def _check_signatures(self, file_data: bytes) -> Dict[str, Any]:
-        """Check for known malware signatures
-        
-        Args:
-            file_data: Binary file data
+    def _extract_strings(self, file_data: bytes, min_length: int = 4, max_strings: int = 1000) -> List[str]:
+        """Extract readable strings from binary data"""
+        try:
+            # ASCII strings
+            ascii_strings = re.findall(
+                rb'[!-~]{' + str(min_length).encode() + rb',}',
+                file_data
+            )
             
-        Returns:
-            dict: Signature analysis results
-        """
-        signature_matches = []
-        
-        for signature_name, signature_data in self.malware_signatures.items():
-            pattern = signature_data['pattern']
-            if isinstance(pattern, bytes):
-                if pattern in file_data:
-                    signature_matches.append({
-                        'name': signature_name,
-                        'type': signature_data.get('type', 'unknown'),
-                        'severity': signature_data.get('severity', 'medium'),
-                        'description': signature_data.get('description', 'Known malware signature')
-                    })
-            elif isinstance(pattern, str):
+            # Unicode strings (basic)
+            unicode_strings = re.findall(
+                rb'(?:[!-~]\x00){' + str(min_length).encode() + rb',}',
+                file_data
+            )
+            
+            # Combine and decode
+            all_strings = []
+            
+            # Process ASCII strings
+            for s in ascii_strings:
                 try:
-                    regex_pattern = re.compile(pattern.encode(), re.IGNORECASE)
-                    if regex_pattern.search(file_data):
-                        signature_matches.append({
-                            'name': signature_name,
-                            'type': signature_data.get('type', 'unknown'),
-                            'severity': signature_data.get('severity', 'medium'),
-                            'description': signature_data.get('description', 'Known malware signature')
-                        })
-                except re.error:
+                    decoded = s.decode('utf-8', errors='ignore')
+                    if decoded and len(decoded) >= min_length:
+                        all_strings.append(decoded)
+                except:
                     continue
-        
-        return {
-            'total_matches': len(signature_matches),
-            'matches': signature_matches
-        }
-    
-    def _extract_metadata(self, file_data: bytes, filename: str) -> Dict[str, Any]:
-        """Extract file metadata
-        
-        Args:
-            file_data: Binary file data
-            filename: Original filename
             
-        Returns:
-            dict: File metadata
-        """
-        metadata = {
-            'size': len(file_data),
-            'extension': filename.split('.')[-1] if '.' in filename else '',
-            'has_overlay': False,
-            'sections': []
-        }
-        
-        # PE file analysis
-        if file_data.startswith(b'MZ'):
-            metadata.update(self._analyze_pe_metadata(file_data))
-        
-        return metadata
-    
-    def _analyze_pe_metadata(self, file_data: bytes) -> Dict[str, Any]:
-        """Analyze PE file metadata
-        
-        Args:
-            file_data: PE file data
+            # Process Unicode strings
+            for s in unicode_strings:
+                try:
+                    decoded = s.decode('utf-16le', errors='ignore')
+                    if decoded and len(decoded) >= min_length:
+                        all_strings.append(decoded)
+                except:
+                    continue
             
-        Returns:
-            dict: PE metadata
-        """
-        try:
-            # Basic PE header analysis
-            if len(file_data) < 64:
-                return {'error': 'File too small for PE analysis'}
-            
-            # Check for PE signature
-            pe_offset = int.from_bytes(file_data[60:64], 'little')
-            if pe_offset >= len(file_data) - 4:
-                return {'error': 'Invalid PE offset'}
-            
-            pe_signature = file_data[pe_offset:pe_offset+4]
-            if pe_signature != b'PE\x00\x00':
-                return {'error': 'Invalid PE signature'}
-            
-            return {
-                'is_pe': True,
-                'pe_offset': pe_offset,
-                'architecture': 'x86' if file_data[pe_offset+4:pe_offset+6] == b'\x4c\x01' else 'x64'
-            }
+            # Remove duplicates and limit
+            unique_strings = list(set(all_strings))
+            return unique_strings[:max_strings]
             
         except Exception as e:
-            return {'error': f'PE analysis failed: {str(e)}'}
+            return []
     
-    def _find_suspicious_indicators(self, analysis_results: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Find suspicious indicators based on analysis results
+    def _analyze_patterns(self, strings: List[str]) -> Dict[str, List[str]]:
+        """Analyze patterns in extracted strings"""
+        patterns = {
+            'urls': [],
+            'ips': [],
+            'emails': [],
+            'domains': [],
+            'file_paths': [],
+            'registry_keys': [],
+            'suspicious_keywords': []
+        }
         
-        Args:
-            analysis_results: Complete analysis results
+        # Pattern definitions
+        url_pattern = re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+', re.IGNORECASE)
+        ip_pattern = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
+        email_pattern = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
+        domain_pattern = re.compile(r'\b[a-zA-Z0-9-]+\.[a-zA-Z]{2,}\b')
+        path_pattern = re.compile(r'[A-Za-z]:\\[^<>:"|?*\n\r]*', re.IGNORECASE)
+        registry_pattern = re.compile(r'HKEY_[A-Z_]+\\[^<>:"|?*\n\r]*', re.IGNORECASE)
+        
+        try:
+            for string in strings:
+                # URLs
+                urls = url_pattern.findall(string)
+                patterns['urls'].extend(urls)
+                
+                # IP addresses
+                ips = ip_pattern.findall(string)
+                patterns['ips'].extend(ips)
+                
+                # Email addresses
+                emails = email_pattern.findall(string)
+                patterns['emails'].extend(emails)
+                
+                # Domains
+                domains = domain_pattern.findall(string)
+                patterns['domains'].extend(domains)
+                
+                # File paths
+                paths = path_pattern.findall(string)
+                patterns['file_paths'].extend(paths)
+                
+                # Registry keys
+                registry_keys = registry_pattern.findall(string)
+                patterns['registry_keys'].extend(registry_keys)
+                
+                # Suspicious keywords
+                for keyword in self.suspicious_keywords:
+                    if keyword.lower() in string.lower():
+                        patterns['suspicious_keywords'].append(keyword)
             
-        Returns:
-            list: Suspicious indicators found
-        """
+            # Remove duplicates and limit results
+            for key in patterns:
+                patterns[key] = list(set(patterns[key]))[:50]  # Limit to 50 per category
+            
+            return patterns
+        except:
+            return patterns
+    
+    def _find_suspicious_indicators(self, file_data: bytes, strings: List[str]) -> List[str]:
+        """Find suspicious indicators in file"""
         indicators = []
         
-        # High entropy check
-        entropy = analysis_results.get('entropy', 0)
-        if entropy > 7.5:
-            indicators.append({
-                'type': 'high_entropy',
-                'severity': 'medium',
-                'description': f'High entropy detected ({entropy:.2f}) - possible encryption/packing',
-                'value': entropy
-            })
-        
-        # Suspicious patterns
-        patterns = analysis_results.get('patterns', {})
-        for category, matches in patterns.items():
-            if matches:
-                indicators.append({
-                    'type': 'suspicious_pattern',
-                    'severity': 'medium',
-                    'description': f'Suspicious {category} patterns detected',
-                    'value': len(matches),
-                    'category': category
-                })
-        
-        # Signature matches
-        signatures = analysis_results.get('signatures', {})
-        signature_matches = signatures.get('matches', [])
-        for match in signature_matches:
-            indicators.append({
-                'type': 'malware_signature',
-                'severity': match.get('severity', 'high'),
-                'description': f"Known malware signature: {match['name']}",
-                'value': match['name']
-            })
-        
-        # Large file size
-        file_size = analysis_results.get('file_size', 0)
-        if file_size > 50 * 1024 * 1024:  # 50MB
-            indicators.append({
-                'type': 'large_file',
-                'severity': 'low',
-                'description': f'Large file size ({file_size} bytes) - unusual for malware',
-                'value': file_size
-            })
-        
-        return indicators
+        try:
+            # Check for packed/compressed content (high entropy)
+            entropy = self._calculate_entropy(file_data)
+            if entropy > 7.0:
+                indicators.append("High entropy - possibly packed/encrypted")
+            
+            # Check for suspicious API calls
+            suspicious_apis = [
+                'CreateProcess', 'WriteProcessMemory', 'VirtualAlloc', 
+                'LoadLibrary', 'GetProcAddress', 'RegCreateKey', 'RegSetValue',
+                'CreateFile', 'WriteFile', 'CreateThread', 'OpenProcess',
+                'SetWindowsHook', 'FindWindow', 'GetWindow', 'MessageBox'
+            ]
+            
+            for api in suspicious_apis:
+                if any(api.lower() in s.lower() for s in strings):
+                    indicators.append(f"Suspicious API call: {api}")
+            
+            # Check for network indicators
+            network_keywords = ['socket', 'connect', 'send', 'recv', 'http', 'tcp', 'udp']
+            for keyword in network_keywords:
+                if any(keyword.lower() in s.lower() for s in strings):
+                    indicators.append(f"Network activity indicator: {keyword}")
+                    break
+            
+            # Check for crypto indicators
+            crypto_keywords = ['encrypt', 'decrypt', 'cipher', 'key', 'aes', 'rsa', 'md5', 'sha']
+            for keyword in crypto_keywords:
+                if any(keyword.lower() in s.lower() for s in strings):
+                    indicators.append(f"Cryptographic indicator: {keyword}")
+                    break
+            
+            # Check for persistence mechanisms
+            persistence_keywords = ['autorun', 'startup', 'service', 'task', 'scheduled']
+            for keyword in persistence_keywords:
+                if any(keyword.lower() in s.lower() for s in strings):
+                    indicators.append(f"Persistence mechanism: {keyword}")
+                    break
+            
+            return indicators
+        except:
+            return indicators
     
-    def _load_suspicious_patterns(self) -> Dict[str, Dict[str, re.Pattern]]:
-        """Load suspicious pattern definitions
+    def _calculate_risk_factors(self, results: Dict) -> List[str]:
+        """Calculate risk factors based on analysis results"""
+        risk_factors = []
         
-        Returns:
-            dict: Suspicious patterns by category
-        """
-        patterns = {
-            'network': {
-                'urls': re.compile(r'https?://[^\s<>"]+', re.IGNORECASE),
-                'ips': re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'),
-                'domains': re.compile(r'\b[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\b'),
-                'email_addresses': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
-            },
-            'system': {
-                'registry_keys': re.compile(r'HKEY_[A-Z_]+\\[^\\]+', re.IGNORECASE),
-                'file_paths': re.compile(r'[A-Za-z]:\\[^\\]+(?:\\[^\\]+)*', re.IGNORECASE),
-                'windows_apis': re.compile(r'\b(CreateFile|WriteFile|RegCreateKey|RegSetValue|GetProcAddress|LoadLibrary|VirtualAlloc|CreateProcess|ShellExecute)\b', re.IGNORECASE),
-                'process_names': re.compile(r'\b(cmd\.exe|powershell\.exe|rundll32\.exe|regsvr32\.exe|wscript\.exe|cscript\.exe)\b', re.IGNORECASE)
-            },
-            'crypto': {
-                'bitcoin_addresses': re.compile(r'\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b'),
-                'ethereum_addresses': re.compile(r'\b0x[a-fA-F0-9]{40}\b'),
-                'crypto_keywords': re.compile(r'\b(bitcoin|btc|wallet|private[_\s]?key|encryption|decrypt|cipher|ransom|unlock)\b', re.IGNORECASE)
-            },
-            'malware': {
-                'packer_indicators': re.compile(r'\b(upx|pex|aspack|fsg|mpress)\b', re.IGNORECASE),
-                'steganography': re.compile(r'\b(steghide|stegsolve|outguess|jphide)\b', re.IGNORECASE),
-                'persistence': re.compile(r'\b(startup|autorun|scheduled task|service|registry run)\b', re.IGNORECASE)
-            }
-        }
-        
-        return patterns
-    
-    def _load_malware_signatures(self) -> Dict[str, Dict[str, Any]]:
-        """Load malware signature definitions
-        
-        Returns:
-            dict: Malware signatures
-        """
-        signatures = {
-            'generic_trojan_1': {
-                'pattern': b'\x4d\x5a\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff',
-                'type': 'trojan',
-                'severity': 'high',
-                'description': 'Generic trojan signature pattern'
-            },
-            'wannacry_string': {
-                'pattern': r'WannaCry|Wana\s*Decrypt|\.wncryt',
-                'type': 'ransomware',
-                'severity': 'critical',
-                'description': 'WannaCry ransomware indicators'
-            },
-            'emotet_string': {
-                'pattern': r'emotet|heodo|feodo',
-                'type': 'trojan',
-                'severity': 'high',
-                'description': 'Emotet trojan indicators'
-            }
-        }
-        
-        return signatures
+        try:
+            # High entropy risk
+            if results.get('entropy', 0) > 6.5:
+                risk_factors.append("High entropy content")
+            
+            # Suspicious patterns
+            patterns = results.get('patterns', {})
+            if patterns.get('urls'):
+                risk_factors.append(f"Contains {len(patterns['urls'])} URLs")
+            if patterns.get('ips'):
+                risk_factors.append(f"Contains {len(patterns['ips'])} IP addresses")
+            if patterns.get('suspicious_keywords'):
+                risk_factors.append(f"Contains {len(patterns['suspicious_keywords'])} suspicious keywords")
+            
+            # File size factors
+            file_size = results.get('file_size', 0)
+            if file_size > 10 * 1024 * 1024:  # > 10MB
+                risk_factors.append("Large file size")
+            elif file_size < 1024:  # < 1KB
+                risk_factors.append("Very small file size")
+            
+            # Suspicious indicators
+            indicators = results.get('suspicious_indicators', [])
+            if len(indicators) > 3:
+                risk_factors.append(f"Multiple suspicious indicators ({len(indicators)})")
+            
+            return risk_factors
+        except:
+            return risk_factors
