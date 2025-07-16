@@ -9,111 +9,30 @@ import json
 import io
 from datetime import datetime
 from typing import Dict, Any, Optional
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-from reportlab.platypus.tableofcontents import TableOfContents
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+
+try:
+    from fpdf import FPDF
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    FPDF_AVAILABLE = True
+except ImportError:
+    FPDF_AVAILABLE = False
 
 class ReportGenerator:
     """Professional report generator for malware analysis"""
     
     def __init__(self):
-        self.styles = getSampleStyleSheet()
-        self._setup_custom_styles()
+        self.colors = {
+            'CLEAN': '#28a745',
+            'LOW': '#ffc107',
+            'MEDIUM': '#fd7e14',
+            'HIGH': '#dc3545',
+            'CRITICAL': '#721c24'
+        }
     
-    def _setup_custom_styles(self):
-        """Setup custom styles for the report"""
-        # Title style
-        self.styles.add(ParagraphStyle(
-            name='CustomTitle',
-            parent=self.styles['Title'],
-            fontSize=24,
-            textColor=colors.HexColor('#0066CC'),
-            alignment=TA_CENTER,
-            spaceAfter=30,
-            fontName='Helvetica-Bold'
-        ))
-        
-        # Subtitle style
-        self.styles.add(ParagraphStyle(
-            name='CustomSubtitle',
-            parent=self.styles['Heading2'],
-            fontSize=16,
-            textColor=colors.HexColor('#0066CC'),
-            alignment=TA_CENTER,
-            spaceAfter=20,
-            fontName='Helvetica-Bold'
-        ))
-        
-        # Section header style
-        self.styles.add(ParagraphStyle(
-            name='SectionHeader',
-            parent=self.styles['Heading2'],
-            fontSize=14,
-            textColor=colors.HexColor('#0066CC'),
-            spaceBefore=20,
-            spaceAfter=10,
-            fontName='Helvetica-Bold'
-        ))
-        
-        # Threat level styles
-        self.styles.add(ParagraphStyle(
-            name='ThreatCritical',
-            parent=self.styles['Normal'],
-            fontSize=16,
-            textColor=colors.white,
-            backColor=colors.red,
-            alignment=TA_CENTER,
-            borderPadding=10,
-            fontName='Helvetica-Bold'
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='ThreatHigh',
-            parent=self.styles['Normal'],
-            fontSize=16,
-            textColor=colors.white,
-            backColor=colors.orange,
-            alignment=TA_CENTER,
-            borderPadding=10,
-            fontName='Helvetica-Bold'
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='ThreatMedium',
-            parent=self.styles['Normal'],
-            fontSize=16,
-            textColor=colors.white,
-            backColor=colors.yellow,
-            alignment=TA_CENTER,
-            borderPadding=10,
-            fontName='Helvetica-Bold'
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='ThreatLow',
-            parent=self.styles['Normal'],
-            fontSize=16,
-            textColor=colors.white,
-            backColor=colors.green,
-            alignment=TA_CENTER,
-            borderPadding=10,
-            fontName='Helvetica-Bold'
-        ))
-        
-        self.styles.add(ParagraphStyle(
-            name='ThreatClean',
-            parent=self.styles['Normal'],
-            fontSize=16,
-            textColor=colors.white,
-            backColor=colors.green,
-            alignment=TA_CENTER,
-            borderPadding=10,
-            fontName='Helvetica-Bold'
-        ))
+    def _get_threat_color(self, threat_level: str) -> str:
+        """Get color for threat level"""
+        return self.colors.get(threat_level, '#6c757d')
     
     def generate_report(self, analysis_results: Dict[str, Any]) -> bytes:
         """
@@ -126,483 +45,367 @@ class ReportGenerator:
             PDF report as bytes
         """
         try:
-            buffer = io.BytesIO()
-            doc = SimpleDocTemplate(
-                buffer,
-                pagesize=A4,
-                rightMargin=72,
-                leftMargin=72,
-                topMargin=72,
-                bottomMargin=18
-            )
-            
-            # Build report content
-            story = []
-            
-            # Title page
-            story.extend(self._build_title_page(analysis_results))
-            
-            # Executive summary
-            story.extend(self._build_executive_summary(analysis_results))
-            
-            # File information
-            story.extend(self._build_file_information(analysis_results))
-            
-            # Hash analysis
-            story.extend(self._build_hash_analysis(analysis_results))
-            
-            # Threat assessment
-            story.extend(self._build_threat_assessment(analysis_results))
-            
-            # Technical details
-            story.extend(self._build_technical_details(analysis_results))
-            
-            # Pattern analysis
-            story.extend(self._build_pattern_analysis(analysis_results))
-            
-            # VirusTotal results
-            story.extend(self._build_virustotal_results(analysis_results))
-            
-            # Recommendations
-            story.extend(self._build_recommendations(analysis_results))
-            
-            # Build PDF
-            doc.build(story)
-            
-            # Return PDF bytes
-            buffer.seek(0)
-            return buffer.read()
-            
+            if FPDF_AVAILABLE:
+                return self._generate_fpdf_report(analysis_results)
+            else:
+                return self._generate_simple_text_report(analysis_results)
         except Exception as e:
-            # Return error message as simple PDF
             return self._generate_error_report(str(e))
     
-    def _build_title_page(self, results: Dict) -> list:
-        """Build title page"""
-        story = []
-        
-        # Main title
-        story.append(Paragraph("🛡️ MalwareShield Pro", self.styles['CustomTitle']))
-        story.append(Spacer(1, 12))
-        
-        # Subtitle
-        story.append(Paragraph("Advanced Malware Analysis Report", self.styles['CustomSubtitle']))
-        story.append(Spacer(1, 30))
-        
-        # File information
-        filename = results.get('filename', 'Unknown')
-        story.append(Paragraph(f"<b>File:</b> {filename}", self.styles['Normal']))
-        story.append(Spacer(1, 12))
-        
-        # Analysis date
-        analysis_time = results.get('analysis_time', datetime.now().isoformat())
-        story.append(Paragraph(f"<b>Analysis Date:</b> {analysis_time[:19]}", self.styles['Normal']))
-        story.append(Spacer(1, 12))
-        
-        # Threat level preview
-        threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
-        threat_score = results.get('threat_assessment', {}).get('score', 0)
-        
-        threat_style = f'Threat{threat_level.title()}'
-        if threat_style in self.styles:
-            story.append(Paragraph(f"Threat Level: {threat_level} ({threat_score}/100)", self.styles[threat_style]))
-        else:
-            story.append(Paragraph(f"<b>Threat Level:</b> {threat_level} ({threat_score}/100)", self.styles['Normal']))
-        
-        story.append(Spacer(1, 50))
-        
-        # Credits
-        story.append(Paragraph("<b>Built with 🛡️ by [Vishwas]</b>", self.styles['Normal']))
-        story.append(Paragraph("MalwareShield Pro - Advanced Threat Detection Platform", self.styles['Normal']))
-        
-        story.append(PageBreak())
-        return story
-    
-    def _build_executive_summary(self, results: Dict) -> list:
-        """Build executive summary"""
-        story = []
-        
-        story.append(Paragraph("Executive Summary", self.styles['SectionHeader']))
-        
-        # Generate summary based on results
-        filename = results.get('filename', 'Unknown')
-        file_size = results.get('file_size', 0)
-        threat_data = results.get('threat_assessment', {})
-        threat_level = threat_data.get('level', 'UNKNOWN')
-        threat_score = threat_data.get('score', 0)
-        
-        summary_text = f"""
-        This report presents the analysis results for the file '{filename}' 
-        ({file_size:,} bytes) conducted using MalwareShield Pro's advanced static analysis engine.
-        
-        <b>Key Findings:</b>
-        • Threat Level: {threat_level} ({threat_score}/100)
-        • File Size: {file_size:,} bytes
-        • Entropy Level: {results.get('entropy', 0):.2f}
-        • Suspicious Indicators: {len(results.get('suspicious_indicators', []))}
-        
-        The analysis employed multiple detection mechanisms including hash analysis, 
-        entropy calculation, string extraction, pattern matching, and threat scoring algorithms.
-        """
-        
-        story.append(Paragraph(summary_text, self.styles['Normal']))
-        story.append(Spacer(1, 20))
-        
-        return story
-    
-    def _build_file_information(self, results: Dict) -> list:
-        """Build file information section"""
-        story = []
-        
-        story.append(Paragraph("File Information", self.styles['SectionHeader']))
-        
-        # Create table with file details
-        file_data = [
-            ['Property', 'Value'],
-            ['Filename', results.get('filename', 'Unknown')],
-            ['File Size', f"{results.get('file_size', 0):,} bytes"],
-            ['File Type', results.get('file_type', 'Unknown')],
-            ['Analysis Time', results.get('analysis_time', 'Unknown')[:19]],
-            ['Entropy', f"{results.get('entropy', 0):.3f}"]
-        ]
-        
-        file_table = Table(file_data, colWidths=[2*inch, 3*inch])
-        file_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0066CC')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 14),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
-        ]))
-        
-        story.append(file_table)
-        story.append(Spacer(1, 20))
-        
-        return story
-    
-    def _build_hash_analysis(self, results: Dict) -> list:
-        """Build hash analysis section"""
-        story = []
-        
-        story.append(Paragraph("Hash Analysis", self.styles['SectionHeader']))
-        
-        hashes = results.get('hashes', {})
-        if hashes:
-            hash_data = [
-                ['Hash Type', 'Value'],
-                ['MD5', hashes.get('md5', 'Not calculated')],
-                ['SHA1', hashes.get('sha1', 'Not calculated')],
-                ['SHA256', hashes.get('sha256', 'Not calculated')]
-            ]
+    def _generate_fpdf_report(self, results: Dict[str, Any]) -> bytes:
+        """Generate PDF report using FPDF2"""
+        try:
+            pdf = FPDF()
+            pdf.add_page()
             
-            hash_table = Table(hash_data, colWidths=[1.5*inch, 4*inch])
-            hash_table.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0066CC')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 12),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('FONTNAME', (0, 1), (-1, -1), 'Courier')
-            ]))
+            # Title
+            pdf.set_font('Arial', 'B', 20)
+            pdf.set_text_color(0, 102, 204)
+            pdf.cell(0, 15, '🛡️ MalwareShield Pro', ln=True, align='C')
             
-            story.append(hash_table)
-        else:
-            story.append(Paragraph("Hash calculation failed or not available.", self.styles['Normal']))
-        
-        story.append(Spacer(1, 20))
-        return story
-    
-    def _build_threat_assessment(self, results: Dict) -> list:
-        """Build threat assessment section"""
-        story = []
-        
-        story.append(Paragraph("Threat Assessment", self.styles['SectionHeader']))
-        
-        threat_data = results.get('threat_assessment', {})
-        if threat_data:
-            level = threat_data.get('level', 'UNKNOWN')
-            score = threat_data.get('score', 0)
-            confidence = threat_data.get('confidence', 0)
+            pdf.set_font('Arial', 'B', 14)
+            pdf.cell(0, 10, 'Advanced Malware Analysis Report', ln=True, align='C')
+            pdf.ln(10)
             
-            # Threat level display
-            threat_style = f'Threat{level.title()}'
-            if threat_style in self.styles:
-                story.append(Paragraph(f"THREAT LEVEL: {level}", self.styles[threat_style]))
+            # File Information
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(0, 102, 204)
+            pdf.cell(0, 10, 'File Information', ln=True)
+            pdf.ln(5)
+            
+            pdf.set_font('Arial', '', 10)
+            pdf.set_text_color(0, 0, 0)
+            
+            filename = results.get('filename', 'Unknown')
+            file_size = results.get('file_size', 0)
+            file_type = results.get('file_type', 'Unknown')
+            analysis_time = results.get('analysis_time', datetime.now().isoformat())
+            
+            pdf.cell(0, 6, f'Filename: {filename}', ln=True)
+            pdf.cell(0, 6, f'File Size: {file_size:,} bytes', ln=True)
+            pdf.cell(0, 6, f'File Type: {file_type}', ln=True)
+            pdf.cell(0, 6, f'Analysis Time: {analysis_time[:19]}', ln=True)
+            pdf.ln(10)
+            
+            # Hash Analysis
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(0, 102, 204)
+            pdf.cell(0, 10, 'Hash Analysis', ln=True)
+            pdf.ln(5)
+            
+            pdf.set_font('Arial', '', 9)
+            pdf.set_text_color(0, 0, 0)
+            
+            hashes = results.get('hashes', {})
+            if hashes:
+                pdf.cell(0, 6, f"MD5: {hashes.get('md5', 'Not calculated')}", ln=True)
+                pdf.cell(0, 6, f"SHA1: {hashes.get('sha1', 'Not calculated')}", ln=True)
+                pdf.cell(0, 6, f"SHA256: {hashes.get('sha256', 'Not calculated')}", ln=True)
             else:
-                story.append(Paragraph(f"<b>Threat Level:</b> {level}", self.styles['Normal']))
+                pdf.cell(0, 6, 'Hash calculation failed or not available.', ln=True)
+            pdf.ln(10)
             
-            story.append(Spacer(1, 12))
+            # Threat Assessment
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(0, 102, 204)
+            pdf.cell(0, 10, 'Threat Assessment', ln=True)
+            pdf.ln(5)
             
-            # Threat details
-            threat_details = f"""
-            <b>Threat Score:</b> {score}/100<br/>
-            <b>Confidence Level:</b> {confidence:.1%}<br/>
-            <b>Risk Assessment:</b> {self._get_risk_description(level)}
-            """
-            
-            story.append(Paragraph(threat_details, self.styles['Normal']))
-            story.append(Spacer(1, 12))
-            
-            # Reasoning
-            reasons = threat_data.get('reasons', [])
-            if reasons:
-                story.append(Paragraph("<b>Detection Reasons:</b>", self.styles['Normal']))
-                for reason in reasons:
-                    story.append(Paragraph(f"• {reason}", self.styles['Normal']))
-        else:
-            story.append(Paragraph("Threat assessment not available.", self.styles['Normal']))
-        
-        story.append(Spacer(1, 20))
-        return story
-    
-    def _build_technical_details(self, results: Dict) -> list:
-        """Build technical details section"""
-        story = []
-        
-        story.append(Paragraph("Technical Analysis", self.styles['SectionHeader']))
-        
-        # Entropy analysis
-        entropy = results.get('entropy', 0)
-        entropy_text = f"""
-        <b>Entropy Analysis:</b><br/>
-        File entropy: {entropy:.3f}<br/>
-        {self._get_entropy_description(entropy)}
-        """
-        story.append(Paragraph(entropy_text, self.styles['Normal']))
-        story.append(Spacer(1, 12))
-        
-        # String analysis
-        strings = results.get('strings', [])
-        string_text = f"""
-        <b>String Analysis:</b><br/>
-        Extracted strings: {len(strings)}<br/>
-        Notable findings: {self._analyze_strings(strings)}
-        """
-        story.append(Paragraph(string_text, self.styles['Normal']))
-        story.append(Spacer(1, 12))
-        
-        # Suspicious indicators
-        indicators = results.get('suspicious_indicators', [])
-        if indicators:
-            story.append(Paragraph("<b>Suspicious Indicators:</b>", self.styles['Normal']))
-            for indicator in indicators[:10]:  # Limit to 10
-                story.append(Paragraph(f"• {indicator}", self.styles['Normal']))
-        
-        story.append(Spacer(1, 20))
-        return story
-    
-    def _build_pattern_analysis(self, results: Dict) -> list:
-        """Build pattern analysis section"""
-        story = []
-        
-        story.append(Paragraph("Pattern Analysis", self.styles['SectionHeader']))
-        
-        patterns = results.get('patterns', {})
-        if patterns:
-            # Create pattern summary table
-            pattern_data = [['Pattern Type', 'Count', 'Examples']]
-            
-            for pattern_type, items in patterns.items():
-                if items:
-                    examples = ', '.join(items[:3])  # Show first 3 examples
-                    if len(items) > 3:
-                        examples += f' ... (+{len(items)-3} more)'
-                    pattern_data.append([pattern_type.replace('_', ' ').title(), str(len(items)), examples])
-            
-            if len(pattern_data) > 1:
-                pattern_table = Table(pattern_data, colWidths=[1.5*inch, 0.8*inch, 3*inch])
-                pattern_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0066CC')),
-                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                    ('FONTSIZE', (0, 0), (-1, 0), 10),
-                    ('FONTSIZE', (0, 1), (-1, -1), 8),
-                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
-                ]))
+            threat_data = results.get('threat_assessment', {})
+            if threat_data:
+                level = threat_data.get('level', 'UNKNOWN')
+                score = threat_data.get('score', 0)
+                confidence = threat_data.get('confidence', 0)
                 
-                story.append(pattern_table)
+                pdf.set_font('Arial', 'B', 11)
+                pdf.set_text_color(0, 0, 0)
+                pdf.cell(0, 8, f'Threat Level: {level} ({score}/100)', ln=True)
+                pdf.cell(0, 8, f'Confidence: {confidence:.1f}%', ln=True)
+                
+                # Reasoning
+                reasoning = threat_data.get('reasoning', [])
+                if reasoning:
+                    pdf.set_font('Arial', '', 10)
+                    pdf.cell(0, 6, 'Assessment Reasoning:', ln=True)
+                    for reason in reasoning[:5]:  # Limit to 5 reasons
+                        pdf.cell(0, 5, f'• {reason}', ln=True)
+            pdf.ln(10)
+            
+            # Technical Details
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(0, 102, 204)
+            pdf.cell(0, 10, 'Technical Details', ln=True)
+            pdf.ln(5)
+            
+            pdf.set_font('Arial', '', 10)
+            pdf.set_text_color(0, 0, 0)
+            
+            entropy = results.get('entropy', 0)
+            pdf.cell(0, 6, f'Entropy: {entropy:.3f}', ln=True)
+            
+            strings_count = len(results.get('strings', []))
+            pdf.cell(0, 6, f'Extracted Strings: {strings_count}', ln=True)
+            
+            indicators_count = len(results.get('suspicious_indicators', []))
+            pdf.cell(0, 6, f'Suspicious Indicators: {indicators_count}', ln=True)
+            pdf.ln(10)
+            
+            # Suspicious Indicators
+            indicators = results.get('suspicious_indicators', [])
+            if indicators:
+                pdf.set_font('Arial', 'B', 12)
+                pdf.set_text_color(0, 102, 204)
+                pdf.cell(0, 10, 'Suspicious Indicators', ln=True)
+                pdf.ln(5)
+                
+                pdf.set_font('Arial', '', 9)
+                pdf.set_text_color(0, 0, 0)
+                
+                for indicator in indicators[:10]:  # Limit to 10 indicators
+                    pdf.cell(0, 5, f'• {indicator}', ln=True)
+                pdf.ln(10)
+            
+            # VirusTotal Results
+            vt_results = results.get('virustotal', {})
+            if vt_results and vt_results.get('available'):
+                pdf.set_font('Arial', 'B', 12)
+                pdf.set_text_color(0, 102, 204)
+                pdf.cell(0, 10, 'VirusTotal Results', ln=True)
+                pdf.ln(5)
+                
+                pdf.set_font('Arial', '', 10)
+                pdf.set_text_color(0, 0, 0)
+                
+                detections = vt_results.get('detections', 0)
+                total_engines = vt_results.get('total_engines', 0)
+                
+                pdf.cell(0, 6, f'Detection Rate: {detections}/{total_engines} engines', ln=True)
+                
+                if detections > 0:
+                    detected_engines = vt_results.get('detected_engines', [])
+                    pdf.cell(0, 6, 'Detected by:', ln=True)
+                    for engine in detected_engines[:5]:  # Limit to 5 engines
+                        pdf.cell(0, 5, f'• {engine}', ln=True)
+                pdf.ln(10)
+            
+            # Recommendations
+            pdf.set_font('Arial', 'B', 12)
+            pdf.set_text_color(0, 102, 204)
+            pdf.cell(0, 10, 'Recommendations', ln=True)
+            pdf.ln(5)
+            
+            pdf.set_font('Arial', '', 10)
+            pdf.set_text_color(0, 0, 0)
+            
+            threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
+            recommendations = self._get_recommendations(threat_level, results)
+            
+            for rec in recommendations:
+                pdf.cell(0, 6, f'• {rec}', ln=True)
+            pdf.ln(10)
+            
+            # Footer
+            pdf.set_font('Arial', 'I', 8)
+            pdf.set_text_color(128, 128, 128)
+            pdf.cell(0, 10, 'Built with 🛡️ by [Vishwas] - MalwareShield Pro', ln=True, align='C')
+            
+            # Return PDF as bytes
+            return pdf.output(dest='S').encode('latin-1')
+            
+        except Exception as e:
+            return self._generate_error_report(f"FPDF generation error: {str(e)}")
+    
+    def _generate_simple_text_report(self, results: Dict[str, Any]) -> bytes:
+        """Generate simple text-based report when FPDF is not available"""
+        try:
+            report_lines = []
+            report_lines.append("=" * 60)
+            report_lines.append("🛡️ MalwareShield Pro - Analysis Report")
+            report_lines.append("=" * 60)
+            report_lines.append("")
+            
+            # File Information
+            report_lines.append("FILE INFORMATION")
+            report_lines.append("-" * 20)
+            report_lines.append(f"Filename: {results.get('filename', 'Unknown')}")
+            report_lines.append(f"File Size: {results.get('file_size', 0):,} bytes")
+            report_lines.append(f"File Type: {results.get('file_type', 'Unknown')}")
+            report_lines.append(f"Analysis Time: {results.get('analysis_time', 'Unknown')[:19]}")
+            report_lines.append("")
+            
+            # Hash Analysis
+            report_lines.append("HASH ANALYSIS")
+            report_lines.append("-" * 20)
+            hashes = results.get('hashes', {})
+            if hashes:
+                report_lines.append(f"MD5: {hashes.get('md5', 'Not calculated')}")
+                report_lines.append(f"SHA1: {hashes.get('sha1', 'Not calculated')}")
+                report_lines.append(f"SHA256: {hashes.get('sha256', 'Not calculated')}")
             else:
-                story.append(Paragraph("No significant patterns detected.", self.styles['Normal']))
-        else:
-            story.append(Paragraph("Pattern analysis not available.", self.styles['Normal']))
-        
-        story.append(Spacer(1, 20))
-        return story
-    
-    def _build_virustotal_results(self, results: Dict) -> list:
-        """Build VirusTotal results section"""
-        story = []
-        
-        story.append(Paragraph("VirusTotal Analysis", self.styles['SectionHeader']))
-        
-        vt_results = results.get('virustotal_results')
-        if vt_results and 'error' not in vt_results:
-            positive = vt_results.get('positive_scans', 0)
-            total = vt_results.get('total_scans', 0)
+                report_lines.append("Hash calculation failed or not available.")
+            report_lines.append("")
             
-            vt_text = f"""
-            <b>Detection Results:</b><br/>
-            Positive detections: {positive}/{total}<br/>
-            Detection ratio: {positive/total:.1%} of engines<br/>
-            Scan date: {vt_results.get('scan_date', 'Unknown')}
-            """
+            # Threat Assessment
+            report_lines.append("THREAT ASSESSMENT")
+            report_lines.append("-" * 20)
+            threat_data = results.get('threat_assessment', {})
+            if threat_data:
+                level = threat_data.get('level', 'UNKNOWN')
+                score = threat_data.get('score', 0)
+                confidence = threat_data.get('confidence', 0)
+                
+                report_lines.append(f"Threat Level: {level} ({score}/100)")
+                report_lines.append(f"Confidence: {confidence:.1f}%")
+                
+                reasoning = threat_data.get('reasoning', [])
+                if reasoning:
+                    report_lines.append("Assessment Reasoning:")
+                    for reason in reasoning[:5]:
+                        report_lines.append(f"• {reason}")
+            report_lines.append("")
             
-            story.append(Paragraph(vt_text, self.styles['Normal']))
-        else:
-            error_msg = vt_results.get('error', 'VirusTotal scan not performed') if vt_results else 'VirusTotal scan not performed'
-            story.append(Paragraph(f"VirusTotal: {error_msg}", self.styles['Normal']))
-        
-        story.append(Spacer(1, 20))
-        return story
-    
-    def _build_recommendations(self, results: Dict) -> list:
-        """Build recommendations section"""
-        story = []
-        
-        story.append(Paragraph("Recommendations", self.styles['SectionHeader']))
-        
-        threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
-        
-        recommendations = self._get_recommendations(threat_level, results)
-        
-        for rec in recommendations:
-            story.append(Paragraph(f"• {rec}", self.styles['Normal']))
-        
-        story.append(Spacer(1, 20))
-        
-        # Footer
-        story.append(Paragraph("Built with 🛡️ by [Vishwas] - MalwareShield Pro", self.styles['Normal']))
-        
-        return story
-    
-    def _get_risk_description(self, level: str) -> str:
-        """Get risk description for threat level"""
-        descriptions = {
-            'CLEAN': "File appears to be clean with no significant threats detected.",
-            'LOW': "File shows minimal suspicious characteristics. Low risk of malware.",
-            'MEDIUM': "File contains suspicious patterns that warrant further investigation.",
-            'HIGH': "File shows multiple suspicious indicators suggesting potential malware.",
-            'CRITICAL': "File is highly suspicious with severe threat indicators. Immediate action required."
-        }
-        return descriptions.get(level, "Unable to determine risk level.")
-    
-    def _get_entropy_description(self, entropy: float) -> str:
-        """Get entropy description"""
-        if entropy > 7.5:
-            return "Extremely high entropy indicates heavy compression or encryption."
-        elif entropy > 7.0:
-            return "Very high entropy suggests packed or encrypted content."
-        elif entropy > 6.5:
-            return "High entropy may indicate compression or obfuscation."
-        elif entropy > 5.0:
-            return "Moderate entropy levels are within normal range."
-        else:
-            return "Low entropy suggests structured, readable content."
-    
-    def _analyze_strings(self, strings: list) -> str:
-        """Analyze strings for notable characteristics"""
-        if not strings:
-            return "No readable strings found."
-        
-        total = len(strings)
-        if total > 1000:
-            return f"Large number of strings ({total}) may indicate complex functionality."
-        elif total < 10:
-            return f"Very few strings ({total}) may suggest obfuscation or binary content."
-        else:
-            return f"Normal string count ({total}) detected."
-    
-    def _get_recommendations(self, threat_level: str, results: Dict) -> list:
-        """Generate recommendations based on threat level"""
-        base_recommendations = [
-            "Verify file source and legitimacy before execution",
-            "Scan with multiple antivirus engines for confirmation",
-            "Monitor system behavior if file execution is necessary"
-        ]
-        
-        level_specific = {
-            'CLEAN': [
-                "File appears safe but continue monitoring",
-                "Regular system scans recommended"
-            ],
-            'LOW': [
-                "Exercise caution but file is likely safe",
-                "Consider sandboxed execution for testing"
-            ],
-            'MEDIUM': [
-                "Investigate file further before use",
-                "Consider quarantine until verification complete"
-            ],
-            'HIGH': [
-                "Strongly recommend avoiding execution",
-                "Quarantine file immediately",
-                "Report to security team if in corporate environment"
-            ],
-            'CRITICAL': [
-                "DO NOT EXECUTE - High malware probability",
-                "Isolate system if file was already executed",
-                "Perform full system scan and cleanup",
-                "Report to security team immediately"
-            ]
-        }
-        
-        recommendations = base_recommendations.copy()
-        recommendations.extend(level_specific.get(threat_level, []))
-        
-        return recommendations
+            # Technical Details
+            report_lines.append("TECHNICAL DETAILS")
+            report_lines.append("-" * 20)
+            report_lines.append(f"Entropy: {results.get('entropy', 0):.3f}")
+            report_lines.append(f"Extracted Strings: {len(results.get('strings', []))}")
+            report_lines.append(f"Suspicious Indicators: {len(results.get('suspicious_indicators', []))}")
+            report_lines.append("")
+            
+            # Suspicious Indicators
+            indicators = results.get('suspicious_indicators', [])
+            if indicators:
+                report_lines.append("SUSPICIOUS INDICATORS")
+                report_lines.append("-" * 20)
+                for indicator in indicators[:10]:
+                    report_lines.append(f"• {indicator}")
+                report_lines.append("")
+            
+            # VirusTotal Results
+            vt_results = results.get('virustotal', {})
+            if vt_results and vt_results.get('available'):
+                report_lines.append("VIRUSTOTAL RESULTS")
+                report_lines.append("-" * 20)
+                detections = vt_results.get('detections', 0)
+                total_engines = vt_results.get('total_engines', 0)
+                report_lines.append(f"Detection Rate: {detections}/{total_engines} engines")
+                
+                if detections > 0:
+                    detected_engines = vt_results.get('detected_engines', [])
+                    report_lines.append("Detected by:")
+                    for engine in detected_engines[:5]:
+                        report_lines.append(f"• {engine}")
+                report_lines.append("")
+            
+            # Recommendations
+            report_lines.append("RECOMMENDATIONS")
+            report_lines.append("-" * 20)
+            threat_level = results.get('threat_assessment', {}).get('level', 'UNKNOWN')
+            recommendations = self._get_recommendations(threat_level, results)
+            
+            for rec in recommendations:
+                report_lines.append(f"• {rec}")
+            report_lines.append("")
+            
+            # Footer
+            report_lines.append("=" * 60)
+            report_lines.append("Built with 🛡️ by [Vishwas] - MalwareShield Pro")
+            report_lines.append("=" * 60)
+            
+            return '\n'.join(report_lines).encode('utf-8')
+            
+        except Exception as e:
+            return self._generate_error_report(f"Text report generation error: {str(e)}")
     
     def _generate_error_report(self, error_message: str) -> bytes:
         """Generate simple error report"""
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
+        error_report = f"""
+MalwareShield Pro - Report Generation Error
+
+An error occurred while generating the report:
+{error_message}
+
+Please try again or contact support.
+
+Built with 🛡️ by [Vishwas]
+"""
+        return error_report.encode('utf-8')
+    
+    def _get_recommendations(self, threat_level: str, results: Dict) -> list:
+        """Generate recommendations based on threat level"""
+        recommendations = []
         
-        story = [
-            Paragraph("MalwareShield Pro - Report Generation Error", self.styles['Title']),
-            Spacer(1, 20),
-            Paragraph(f"Error: {error_message}", self.styles['Normal']),
-            Spacer(1, 20),
-            Paragraph("Built with 🛡️ by [Vishwas]", self.styles['Normal'])
-        ]
+        if threat_level == 'CRITICAL':
+            recommendations.extend([
+                "IMMEDIATE ACTION REQUIRED: Isolate the system immediately",
+                "Do not execute or open this file under any circumstances",
+                "Run a full system scan with updated antivirus software",
+                "Consider restoring from a clean backup if file was executed",
+                "Report to security team and consider forensic analysis"
+            ])
+        elif threat_level == 'HIGH':
+            recommendations.extend([
+                "HIGH RISK: Do not execute this file",
+                "Quarantine the file immediately",
+                "Scan the system with multiple antivirus engines",
+                "Monitor system for suspicious activities",
+                "Consider professional malware analysis"
+            ])
+        elif threat_level == 'MEDIUM':
+            recommendations.extend([
+                "MODERATE RISK: Exercise caution with this file",
+                "Do not execute without proper sandboxing",
+                "Consider additional analysis with specialized tools",
+                "Monitor file behavior if execution is necessary",
+                "Keep system and antivirus software updated"
+            ])
+        elif threat_level == 'LOW':
+            recommendations.extend([
+                "LOW RISK: File appears relatively safe but remain vigilant",
+                "Consider scanning with additional antivirus engines",
+                "Monitor system after execution",
+                "Ensure system security measures are in place"
+            ])
+        else:  # CLEAN or UNKNOWN
+            recommendations.extend([
+                "File appears clean based on current analysis",
+                "No immediate threats detected",
+                "Continue normal security practices",
+                "Keep antivirus software updated"
+            ])
         
-        doc.build(story)
-        buffer.seek(0)
-        return buffer.read()
+        # Add general recommendations
+        recommendations.extend([
+            "Always maintain updated antivirus software",
+            "Regular system backups are recommended",
+            "Practice safe computing habits"
+        ])
+        
+        return recommendations
     
     def export_json(self, results: Dict[str, Any]) -> str:
         """Export results as JSON"""
         try:
-            # Clean up results for JSON serialization
-            cleaned_results = self._clean_for_json(results)
+            # Clean results for JSON serialization
+            clean_results = self._clean_for_json(results)
             
             # Add metadata
-            export_data = {
-                'metadata': {
-                    'exported_at': datetime.now().isoformat(),
-                    'tool': 'MalwareShield Pro',
-                    'version': '2.0',
-                    'author': 'Built with 🛡️ by [Vishwas]'
-                },
-                'analysis_results': cleaned_results
+            clean_results['report_metadata'] = {
+                'generated_at': datetime.now().isoformat(),
+                'generator': 'MalwareShield Pro',
+                'version': '1.0',
+                'format': 'json'
             }
             
-            return json.dumps(export_data, indent=2, default=str)
-            
+            return json.dumps(clean_results, indent=2, ensure_ascii=False)
         except Exception as e:
             return json.dumps({
                 'error': f'JSON export failed: {str(e)}',
-                'metadata': {
-                    'exported_at': datetime.now().isoformat(),
-                    'tool': 'MalwareShield Pro'
+                'report_metadata': {
+                    'generated_at': datetime.now().isoformat(),
+                    'generator': 'MalwareShield Pro',
+                    'version': '1.0',
+                    'format': 'json'
                 }
             }, indent=2)
     
@@ -612,7 +415,9 @@ class ReportGenerator:
             return {k: self._clean_for_json(v) for k, v in data.items()}
         elif isinstance(data, list):
             return [self._clean_for_json(item) for item in data]
-        elif isinstance(data, (str, int, float, bool)):
-            return data
-        else:
+        elif isinstance(data, bytes):
+            return data.decode('utf-8', errors='ignore')
+        elif hasattr(data, '__dict__'):
             return str(data)
+        else:
+            return data
