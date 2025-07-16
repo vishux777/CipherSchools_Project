@@ -76,4 +76,4 @@ This project is open-source under the [MIT License](LICENSE).
 
 ## ✍️ Author
 
-Made with 💻 by **[@vishux777](https://github.com/vishux777)** for **CipherSchools Cybersecurity Course**.
+Made with 💗 by **[@vishux777](https://github.com/vishux777)** for **CipherSchools Cybersecurity Course**. 
